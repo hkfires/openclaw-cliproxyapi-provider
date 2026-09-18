@@ -3,6 +3,7 @@ import {
 	classifyModel,
 	DEFAULT_BASE_URL,
 	fetchCodexModels,
+	fetchModelsDevCostMap,
 	loadConfigFile,
 	resolveEndpoints,
 	resolveFastDefault,
@@ -40,11 +41,14 @@ export function createAuthMethod(configDir: string, providerId: string): Provide
 				})
 			).trim();
 			if (!apiKey) throw new Error("API Key is required");
-			const remote = await fetchCodexModels(endpoints.modelsUrl, apiKey, undefined, ctx.signal);
+			const [remote, costCatalog] = await Promise.all([
+				fetchCodexModels(endpoints.modelsUrl, apiKey, undefined, ctx.signal),
+				fetchModelsDevCostMap(configDir, false, ctx.signal).catch(() => undefined),
+			]);
 			const fastMode = resolveFastDefault(existing);
 			const fastModelIds = remote.filter(supportsFastServiceTier).map((m) => (m.slug ?? m.id ?? "").trim());
 			const models = remote
-				.map((m) => toOpenClawModel(m, providerId, undefined, fastMode))
+				.map((m) => toOpenClawModel(m, providerId, costCatalog, fastMode))
 				.filter((m) => m !== null);
 
 			// Catalog visibility does not imply a registered media-generation runtime.

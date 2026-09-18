@@ -115,19 +115,17 @@ try {
     await run('config', 'validate');
     const inspected = JSON.parse(await run('plugins', 'inspect', 'cliproxyapi', '--runtime', '--json'));
     assert.equal(inspected.plugin.status, 'loaded');
-    assert.deepEqual(inspected.plugin.providerIds, ['cliproxyapi', 'cpa']);
+    assert.deepEqual(inspected.plugin.providerIds, ['cliproxyapi']);
     assert.deepEqual(inspected.plugin.imageGenerationProviderIds, ['cliproxyapi']);
-    for (const id of ['cliproxyapi', 'cpa']) {
-      const beforeRefresh = requests;
-      const models = JSON.parse(await run('models', 'list', '--refresh', '--all', '--provider', id, '--json'));
-      const text = JSON.stringify(models);
-      assert.ok(text.includes(`${id}/smoke-model`), text);
-      // The host preserves membership for an explicit non-empty legacy model list.
-      // Updating its route must not replace that authored list with discovery rows.
-      if (legacy) assert.ok(text.includes(`${id}/manual-model`), text);
-      else assert.ok(text.includes(`${id}/gpt-image-2`), 'hidden model must remain discoverable');
-      assert.ok(requests > beforeRefresh, 'real host must call discovery at the new address');
-    }
+    const beforeRefresh = requests;
+    const models = JSON.parse(await run('models', 'list', '--refresh', '--all', '--provider', 'cliproxyapi', '--json'));
+    const text = JSON.stringify(models);
+    assert.ok(text.includes('cliproxyapi/smoke-model'), text);
+    // The host preserves membership for an explicit non-empty legacy model list.
+    // Updating its route must not replace that authored list with discovery rows.
+    if (legacy) assert.ok(text.includes('cliproxyapi/manual-model'), text);
+    else assert.ok(text.includes('cliproxyapi/gpt-image-2'), 'hidden model must remain discoverable');
+    assert.ok(requests > beforeRefresh, 'real host must call discovery at the new address');
     const saved = JSON.parse(await readFile(env.OPENCLAW_CONFIG_PATH, 'utf8'));
     assert.deepEqual(saved.agents.defaults.imageModel, vision);
     assert.deepEqual(saved.agents.defaults.mediaModels, media);

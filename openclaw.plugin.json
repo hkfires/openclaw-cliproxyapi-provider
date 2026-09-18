@@ -2,7 +2,7 @@
 	"id": "cliproxyapi",
 	"name": "CLIProxyAPI",
 	"version": "0.1.2",
-	"providers": ["cliproxyapi", "cpa"],
+	"providers": ["cliproxyapi"],
 	"contracts": {
 		"imageGenerationProviders": ["cliproxyapi"]
 	},
@@ -20,6 +20,13 @@
 	},
 	"providerCatalogEntry": "./dist/provider-discovery.js",
 	"providerAuthAliases": { "cpa": "cliproxyapi" },
+	"modelCatalog": {
+		"aliases": {
+			"cpa": {
+				"provider": "cliproxyapi"
+			}
+		}
+	},
 	"providerAuthChoices": [
 		{
 			"provider": "cliproxyapi",

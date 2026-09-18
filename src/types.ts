@@ -46,6 +46,15 @@ export interface CodexClientModel {
 	description?: string;
 	context_window?: number;
 	max_context_window?: number;
+	context_length?: number;
+	max_context_length?: number;
+	contextLength?: number;
+	inputTokenLimit?: number;
+	max_input_tokens?: number;
+	max_completion_tokens?: number;
+	max_output_tokens?: number;
+	max_tokens?: number;
+	outputTokenLimit?: number;
 	input_modalities?: string[];
 	supports_image_detail_original?: boolean;
 	supported_reasoning_levels?: CodexReasoningLevel[] | string[];

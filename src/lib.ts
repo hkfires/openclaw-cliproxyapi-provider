@@ -329,6 +329,40 @@ export function supportsFastServiceTier(model: CodexClientModel): boolean {
 	);
 }
 
+export function parsePositiveInt(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+		return Math.round(value);
+	}
+	if (typeof value === "string") {
+		const parsed = Number.parseInt(value.trim(), 10);
+		if (Number.isFinite(parsed) && parsed > 0) {
+			return parsed;
+		}
+	}
+	return undefined;
+}
+
+export function resolveModelLimits(model: CodexClientModel): { contextWindow: number; maxTokens: number } {
+	const contextWindow =
+		parsePositiveInt(model.context_length) ??
+		parsePositiveInt(model.max_context_length) ??
+		parsePositiveInt(model.context_window) ??
+		parsePositiveInt(model.max_context_window) ??
+		parsePositiveInt(model.contextLength) ??
+		parsePositiveInt(model.inputTokenLimit) ??
+		parsePositiveInt(model.max_input_tokens) ??
+		DEFAULT_CONTEXT_WINDOW;
+
+	const maxTokens =
+		parsePositiveInt(model.max_completion_tokens) ??
+		parsePositiveInt(model.max_output_tokens) ??
+		parsePositiveInt(model.max_tokens) ??
+		parsePositiveInt(model.outputTokenLimit) ??
+		DEFAULT_MAX_TOKENS;
+
+	return { contextWindow, maxTokens };
+}
+
 export function toOpenClawModel(
 	model: CodexClientModel,
 	providerId: string,
@@ -352,12 +386,7 @@ export function toOpenClawModel(
 
 	const efforts = extractReasoningEfforts(model);
 	const hasReasoning = efforts.some((effort) => effort !== "none");
-	const contextWindow =
-		(typeof model.context_window === "number" && model.context_window > 0 ? model.context_window : undefined) ??
-		(typeof model.max_context_window === "number" && model.max_context_window > 0
-			? model.max_context_window
-			: undefined) ??
-		DEFAULT_CONTEXT_WINDOW;
+	const { contextWindow, maxTokens } = resolveModelLimits(model);
 
 	const isFastSupported = supportsFastServiceTier(model);
 	const isFastEffective = fastMode && isFastSupported;
@@ -373,7 +402,7 @@ export function toOpenClawModel(
 		input,
 		cost,
 		contextWindow,
-		maxTokens: DEFAULT_MAX_TOKENS,
+		maxTokens,
 	};
 
 	if (isFastEffective) {
@@ -567,6 +596,15 @@ function stripModelNamespace(modelId: string): string {
 	return modelId.trim().toLowerCase().replace(MODEL_NAMESPACE_PREFIX, "");
 }
 
+export function stripReasoningOrTierSuffix(modelId: string): string {
+	let current = modelId.trim().toLowerCase();
+	const regex = /-(?:low|medium|high|minimal|xhigh|max|ultra|thinking|reasoning|fast|preview|latest)$/i;
+	while (regex.test(current)) {
+		current = current.replace(regex, "");
+	}
+	return current;
+}
+
 function normalizeModelKey(modelId: string): string {
 	return stripModelNamespace(modelId).replace(/[^a-z0-9]/g, "");
 }
@@ -631,7 +669,12 @@ function findDirectModelsDevEntry(modelId: string, catalog: ModelsDevCostCatalog
 
 function findModelsDevEntry(modelId: string, catalog: ModelsDevCostCatalog): ModelsDevCostEntry | undefined {
 	const rawId = modelId.trim().toLowerCase();
-	const lookupIds = uniqueStrings([rawId, ...(MODEL_PRICE_ALIASES[rawId] ?? [])]);
+	const strippedId = stripReasoningOrTierSuffix(rawId);
+	const lookupIds = uniqueStrings([
+		rawId,
+		...(MODEL_PRICE_ALIASES[rawId] ?? []),
+		...(strippedId !== rawId ? [strippedId, ...(MODEL_PRICE_ALIASES[strippedId] ?? [])] : []),
+	]);
 	for (const lookupId of lookupIds) {
 		const match = findDirectModelsDevEntry(lookupId, catalog);
 		if (match) return match;
@@ -806,6 +849,7 @@ export function createDynamicModel(
 		/^(?:o1|o3|deepseek-reasoner|qwq)/i.test(normalizedId) || /(?:thinking|reasoning)/i.test(normalizedId);
 
 	const cost = costCatalog ? matchModelCost(normalizedId, costCatalog, fastMode) : { ...ZERO_COST };
+	const { contextWindow, maxTokens } = resolveModelLimits({ id: normalizedId });
 
 	return {
 		id: normalizedId,
@@ -816,8 +860,8 @@ export function createDynamicModel(
 		reasoning: isReasoning,
 		input: ["text", "image"],
 		cost,
-		contextWindow: DEFAULT_CONTEXT_WINDOW,
-		maxTokens: DEFAULT_MAX_TOKENS,
+		contextWindow,
+		maxTokens,
 		...(fastMode ? { params: { service_tier: "priority" } } : {}),
 	};
 }

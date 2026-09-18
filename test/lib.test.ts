@@ -9,6 +9,7 @@ import {
 	createDynamicModel,
 	DEFAULT_API_DRIVER,
 	DEFAULT_BASE_URL,
+	DEFAULT_CONTEXT_WINDOW,
 	DEFAULT_MAX_TOKENS,
 	DEFAULT_PROVIDER_ID,
 	DEFAULT_PROVIDER_NAME,
@@ -27,8 +28,10 @@ import {
 	resolveEndpoints,
 	resolveFastDefault,
 	resolveIdentity,
+	resolveModelLimits,
 	saveConfigFile,
 	saveModelsCache,
+	stripReasoningOrTierSuffix,
 	supportsFastServiceTier,
 	toOpenClawModel,
 	ZERO_COST,
@@ -436,6 +439,69 @@ describe("models cache persistence", () => {
 		});
 
 		expect(loadModelsCache(dir, "http://different-host:9999")).toBeNull();
+	});
+});
+
+describe("context window & limit resolution", () => {
+	it("strips reasoning, tier, and preview suffixes for pricing aliases", () => {
+		expect(stripReasoningOrTierSuffix("gemini-3.8-flash-high")).toBe("gemini-3.8-flash");
+		expect(stripReasoningOrTierSuffix("grok-4.5-medium")).toBe("grok-4.5");
+		expect(stripReasoningOrTierSuffix("gemini-3-flash-preview")).toBe("gemini-3-flash");
+		expect(stripReasoningOrTierSuffix("claude-3-7-sonnet-latest")).toBe("claude-3-7-sonnet");
+		expect(stripReasoningOrTierSuffix("gpt-5.6-luna")).toBe("gpt-5.6-luna");
+	});
+
+	it("resolves limits strictly from CPA context_length and max_completion_tokens", () => {
+		const model: CodexClientModel = {
+			id: "gemini-3.8-flash-high",
+			context_length: 1048576,
+			max_completion_tokens: 65536,
+		};
+		const limits = resolveModelLimits(model);
+		expect(limits.contextWindow).toBe(1048576);
+		expect(limits.maxTokens).toBe(65536);
+	});
+
+	it("resolves limits from CPA inputTokenLimit and outputTokenLimit", () => {
+		const model: CodexClientModel = {
+			id: "home-model",
+			inputTokenLimit: 524288,
+			outputTokenLimit: 16384,
+		};
+		const limits = resolveModelLimits(model);
+		expect(limits.contextWindow).toBe(524288);
+		expect(limits.maxTokens).toBe(16384);
+	});
+
+	it("resolves limits from CPA context_window and max_tokens", () => {
+		const model: CodexClientModel = {
+			id: "custom-model",
+			context_window: 256000,
+			max_tokens: 32768,
+		};
+		const limits = resolveModelLimits(model);
+		expect(limits.contextWindow).toBe(256000);
+		expect(limits.maxTokens).toBe(32768);
+	});
+
+	it("falls back to defaults when CPA does not provide context or output limits", () => {
+		const model: CodexClientModel = { id: "unknown-model" };
+		const limits = resolveModelLimits(model);
+		expect(limits.contextWindow).toBe(DEFAULT_CONTEXT_WINDOW);
+		expect(limits.maxTokens).toBe(DEFAULT_MAX_TOKENS);
+	});
+
+	it("applies CPA native limits in toOpenClawModel", () => {
+		const mapped = toOpenClawModel(
+			{
+				id: "gemini-3.8-flash-high",
+				context_length: 1048576,
+				max_completion_tokens: 65536,
+			},
+			"cliproxyapi",
+		);
+		expect(mapped?.contextWindow).toBe(1048576);
+		expect(mapped?.maxTokens).toBe(65536);
 	});
 });
 
