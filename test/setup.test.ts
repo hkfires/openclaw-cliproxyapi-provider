@@ -2,9 +2,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProviderAuthContext } from "openclaw/plugin-sdk/core";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as lib from "../src/lib.js";
-import { createAuthMethod } from "../src/setup-entry.js";
+import { createAuthMethod, resolveExistingApiKey } from "../src/setup-entry.js";
 import type { CodexClientModel } from "../src/types.js";
 
 const dirs: string[] = [];
@@ -466,4 +466,141 @@ it("preserves connection and cache when authentication fails", async () => {
 	});
 	expect(readFileSync(join(dir, lib.CONFIG_FILE_NAME), "utf8")).toBe(before.config);
 	expect(readFileSync(join(dir, lib.MODELS_CACHE_FILE_NAME), "utf8")).toBe(before.cache);
+});
+
+it("skips API key prompt when already configured in config file and user presses Enter", async () => {
+	const { dir, ctx, text, fetch } = fixture();
+	seedConnection(dir);
+	text.mockReset();
+	text.mockResolvedValueOnce("http://localhost:8317").mockResolvedValueOnce("");
+	const result = await createAuthMethod(dir, "cliproxyapi").run(ctx);
+	expect(result.profiles[0].credential).toEqual({
+		type: "api_key",
+		provider: "cliproxyapi",
+		key: "previous-key",
+	});
+	expect(text.mock.calls[1][0].message).toContain("press Enter to keep existing");
+	expect(text.mock.calls[1][0].validate("")).toBeUndefined();
+	expect(text.mock.calls[1][0].validate("   ")).toBeUndefined();
+	expect(fetch.mock.calls[0][1]?.headers).toEqual(expect.objectContaining({ Authorization: "Bearer previous-key" }));
+});
+
+it("allows entering a new API key even when an existing key is configured", async () => {
+	const { dir, ctx, text, fetch } = fixture();
+	seedConnection(dir);
+	text.mockReset();
+	text.mockResolvedValueOnce("http://localhost:8317").mockResolvedValueOnce("new-custom-key");
+	const result = await createAuthMethod(dir, "cliproxyapi").run(ctx);
+	expect(result.profiles[0].credential).toEqual({
+		type: "api_key",
+		provider: "cliproxyapi",
+		key: "new-custom-key",
+	});
+	expect(fetch.mock.calls[0][1]?.headers).toEqual(expect.objectContaining({ Authorization: "Bearer new-custom-key" }));
+});
+
+it("skips API key prompt when configured in environment variables", async () => {
+	vi.stubEnv("CLIPROXYAPI_API_KEY", "env-key");
+	const { dir, ctx, text, fetch } = fixture();
+	text.mockReset();
+	text.mockResolvedValueOnce("http://localhost:8317").mockResolvedValueOnce("");
+	const result = await createAuthMethod(dir, "cliproxyapi").run(ctx);
+	expect(result.profiles[0].credential).toEqual({
+		type: "api_key",
+		provider: "cliproxyapi",
+		key: "env-key",
+	});
+	expect(text.mock.calls[1][0].message).toContain("press Enter to keep existing");
+	expect(fetch.mock.calls[0][1]?.headers).toEqual(expect.objectContaining({ Authorization: "Bearer env-key" }));
+});
+
+it("skips API key prompt when configured in models.providers", async () => {
+	const config: ProviderAuthContext["config"] = {
+		models: {
+			providers: {
+				cliproxyapi: {
+					baseUrl: "http://127.0.0.1:8317/v1",
+					api: "openai-responses",
+					apiKey: "provider-config-key",
+					models: [],
+				},
+			},
+		},
+	};
+	const { dir, ctx, text } = fixture(undefined, config);
+	text.mockReset();
+	text.mockResolvedValueOnce("http://localhost:8317").mockResolvedValueOnce("");
+	const result = await createAuthMethod(dir, "cliproxyapi").run(ctx);
+	expect(result.profiles[0].credential).toEqual({
+		type: "api_key",
+		provider: "cliproxyapi",
+		key: "provider-config-key",
+	});
+});
+
+it("requires API key when not configured and rejects empty input", async () => {
+	const { dir, ctx, text } = fixture();
+	text.mockReset();
+	text.mockResolvedValueOnce("http://localhost:8317").mockResolvedValueOnce("");
+	const authMethod = createAuthMethod(dir, "cliproxyapi");
+	await expect(authMethod.run(ctx)).rejects.toThrow("API Key is required");
+	expect(text.mock.calls[1][0].message).toBe("CLIProxyAPI API Key");
+	expect(text.mock.calls[1][0].validate("")).toBe("API Key is required");
+	expect(text.mock.calls[1][0].validate("   ")).toBe("API Key is required");
+});
+
+describe("resolveExistingApiKey", () => {
+	it("resolves from config file", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "cpa-test-"));
+		dirs.push(dir);
+		lib.saveConfigFile(dir, { apiKey: "from-file" });
+		expect(await resolveExistingApiKey(dir, "cliproxyapi")).toBe("from-file");
+	});
+
+	it("resolves from environment variables", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "cpa-test-"));
+		dirs.push(dir);
+		vi.stubEnv("CPA_API_KEY", "from-cpa-env");
+		expect(await resolveExistingApiKey(dir, "cliproxyapi")).toBe("from-cpa-env");
+	});
+
+	it("resolves from ctx.opts token if matching provider", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "cpa-test-"));
+		dirs.push(dir);
+		expect(
+			await resolveExistingApiKey(dir, "cliproxyapi", {
+				opts: { token: "token-123", tokenProvider: "cliproxyapi" },
+			}),
+		).toBe("token-123");
+		expect(
+			await resolveExistingApiKey(dir, "cliproxyapi", {
+				opts: { token: "token-456", tokenProvider: "cpa" },
+			}),
+		).toBe("token-456");
+		expect(
+			await resolveExistingApiKey(dir, "cliproxyapi", {
+				opts: { token: "token-789", tokenProvider: "other-provider" },
+			}),
+		).toBeUndefined();
+	});
+
+	it("resolves from ctx.config models.providers alias", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "cpa-test-"));
+		dirs.push(dir);
+		const ctx = {
+			config: {
+				models: {
+					providers: {
+						cpa: {
+							baseUrl: "http://127.0.0.1:8317/v1",
+							api: "openai-responses" as const,
+							apiKey: "from-alias",
+							models: [],
+						},
+					},
+				},
+			},
+		};
+		expect(await resolveExistingApiKey(dir, "cliproxyapi", ctx)).toBe("from-alias");
+	});
 });

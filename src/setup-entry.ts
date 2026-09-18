@@ -1,9 +1,10 @@
-import type { ProviderAuthMethod, ProviderAuthResult } from "openclaw/plugin-sdk/core";
+import type { ProviderAuthContext, ProviderAuthMethod, ProviderAuthResult } from "openclaw/plugin-sdk/core";
 import {
 	classifyModel,
 	DEFAULT_BASE_URL,
 	fetchCodexModels,
 	fetchModelsDevCostMap,
+	firstNonEmpty,
 	loadConfigFile,
 	resolveEndpoints,
 	resolveFastDefault,
@@ -12,6 +13,83 @@ import {
 	supportsFastServiceTier,
 	toOpenClawModel,
 } from "./lib.js";
+
+export async function resolveExistingApiKey(
+	configDir: string,
+	providerId: string,
+	ctx?: Partial<ProviderAuthContext>,
+): Promise<string | undefined> {
+	try {
+		const existing = loadConfigFile(configDir);
+		if (existing.apiKey?.trim()) return existing.apiKey.trim();
+	} catch {
+		// ignore
+	}
+
+	const envKey = firstNonEmpty(
+		ctx?.env?.CLIPROXYAPI_API_KEY,
+		ctx?.env?.CPA_API_KEY,
+		process.env.CLIPROXYAPI_API_KEY,
+		process.env.CPA_API_KEY,
+	);
+	if (envKey) return envKey;
+
+	if (ctx?.opts?.token?.trim()) {
+		const tokenProvider = ctx.opts.tokenProvider?.trim().toLowerCase();
+		if (
+			!tokenProvider ||
+			tokenProvider === providerId.toLowerCase() ||
+			(providerId === "cliproxyapi" && tokenProvider === "cpa") ||
+			(providerId === "cpa" && tokenProvider === "cliproxyapi")
+		) {
+			return ctx.opts.token.trim();
+		}
+	}
+
+	const providerIds =
+		providerId === "cliproxyapi" || providerId === "cpa"
+			? [providerId, providerId === "cliproxyapi" ? "cpa" : "cliproxyapi"]
+			: [providerId];
+
+	for (const id of providerIds) {
+		const p = ctx?.config?.models?.providers?.[id];
+		if (typeof p?.apiKey === "string" && p.apiKey.trim()) {
+			return p.apiKey.trim();
+		}
+	}
+
+	const hasConfiguredProfile = providerIds.some((id) => {
+		const prefix = `${id}:`;
+		return Object.entries(ctx?.config?.auth?.profiles ?? {}).some(
+			([profileId, p]) => p.provider === id || profileId === id || profileId.startsWith(prefix),
+		);
+	});
+
+	if (hasConfiguredProfile) {
+		for (const id of providerIds) {
+			try {
+				const { resolveApiKeyForProvider } = await import("openclaw/plugin-sdk/agent-runtime");
+				const authPromise = resolveApiKeyForProvider({
+					provider: id,
+					cfg: ctx?.config,
+					agentDir: ctx?.agentDir,
+					workspaceDir: ctx?.workspaceDir,
+				});
+				const auth = await Promise.race([
+					authPromise,
+					new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 1000)),
+				]);
+				if (typeof auth?.apiKey === "string" && auth.apiKey.trim()) {
+					return auth.apiKey.trim();
+				}
+			} catch {
+				// ignore runtime auth resolution errors
+			}
+		}
+	}
+
+	return undefined;
+}
 
 export function createAuthMethod(configDir: string, providerId: string): ProviderAuthMethod {
 	return {
@@ -33,13 +111,16 @@ export function createAuthMethod(configDir: string, providerId: string): Provide
 				})
 			).trim();
 			const endpoints = resolveEndpoints(baseUrl);
-			const apiKey = (
+			const existingApiKey = await resolveExistingApiKey(configDir, providerId, ctx);
+			const inputApiKey = (
 				await ctx.prompter.text({
-					message: "CLIProxyAPI API Key",
+					message: existingApiKey ? "CLIProxyAPI API Key (press Enter to keep existing)" : "CLIProxyAPI API Key",
 					sensitive: true,
-					validate: (value) => (value.trim() ? undefined : "API Key is required"),
+					placeholder: existingApiKey ? "Press Enter to keep existing" : undefined,
+					validate: (value) => (value.trim() || existingApiKey ? undefined : "API Key is required"),
 				})
 			).trim();
+			const apiKey = inputApiKey || existingApiKey;
 			if (!apiKey) throw new Error("API Key is required");
 			const [remote, costCatalog] = await Promise.all([
 				fetchCodexModels(endpoints.modelsUrl, apiKey, undefined, ctx.signal),
