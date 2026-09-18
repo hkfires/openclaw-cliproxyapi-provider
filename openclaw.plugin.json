@@ -1,7 +1,7 @@
 {
 	"id": "cliproxyapi",
 	"name": "CLIProxyAPI",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"providers": ["cliproxyapi", "cpa"],
 	"providerCatalogEntry": "./dist/provider-discovery.js",
 	"providerAuthAliases": { "cpa": "cliproxyapi" },
