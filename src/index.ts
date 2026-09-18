@@ -63,7 +63,7 @@ export function buildProviderRegistration(
 							models,
 						});
 					} catch {
-						options.onLog?.("warn", "无法写入模型缓存，本次发现结果仍可使用。");
+						options.onLog?.("warn", "Failed to write models cache; discovered models are still usable.");
 					}
 				} catch (error) {
 					if (error instanceof Error && "status" in error && (error.status === 401 || error.status === 403))
@@ -73,7 +73,7 @@ export function buildProviderRegistration(
 					models = cached.models.map((m) => ({ ...m, provider: id, api: conn.apiDriver }));
 					fastModels.clear();
 					for (const modelId of cached.fastModelIds) fastModels.add(modelId);
-					options.onLog?.("warn", "模型发现失败，使用已有缓存。");
+					options.onLog?.("warn", "Model discovery failed; falling back to cached models.");
 				}
 				return { provider: { baseUrl: conn.inferenceBaseUrl, api: conn.apiDriver, apiKey: conn.apiKey, models } };
 			},

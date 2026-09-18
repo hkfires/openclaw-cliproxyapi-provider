@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { promisify } from 'node:util';
+import { createAuthMethod } from '../dist/setup-entry.js';
 const exec = promisify(execFile);
 const state = await mkdtemp(join(tmpdir(), 'cpa-host-'));
 let requests = 0;
@@ -23,14 +24,24 @@ for(const k of ['CLIPROXYAPI_PROVIDER_ID','CPA_PROVIDER_ID','CLIPROXYAPI_API','C
 const cli=resolve('node_modules/openclaw/openclaw.mjs');
 async function run(...args){const {stdout,stderr}=await exec(process.execPath,[cli,...args],{env,timeout:90000,maxBuffer:8*1024*1024}); if(stderr) console.error(stderr); return stdout;}
 try {
- await writeFile(join(state,'openclaw.json'),JSON.stringify({agents:{defaults:{model:{primary:'cliproxyapi/smoke-model',fallbacks:['cpa/smoke-model']}}},plugins:{allow:['cliproxyapi'],load:{paths:[resolve('.')]},entries:{cliproxyapi:{enabled:true}}}}));
+ const providers = {};
+ for (const id of ['cliproxyapi', 'cpa']) {
+  const answers = [env.CLIPROXYAPI_BASE_URL, 'smoke-key'];
+  const result = await createAuthMethod(state, id).run({prompter:{text:async()=>answers.shift()},config:{}});
+  Object.assign(providers, result.configPatch.models.providers);
+ }
+ await writeFile(join(state,'openclaw.json'),JSON.stringify({models:{providers},agents:{defaults:{model:{primary:'cliproxyapi/smoke-model',fallbacks:['cpa/smoke-model']}}},plugins:{allow:['cliproxyapi'],load:{paths:[resolve('.')]},entries:{cliproxyapi:{enabled:true}}}}));
+ await run('config','validate');
  const inspected=JSON.parse(await run('plugins','inspect','cliproxyapi','--runtime','--json'));
  assert.equal(inspected.plugin.status,'loaded');
  assert.deepEqual(inspected.plugin.providerIds,['cliproxyapi','cpa']);
+ const beforeRefresh = requests;
  const models=await run('models','list','--refresh','--all','--provider','cliproxyapi','--json');
  assert.match(models,/smoke-model/, `discovery requests: ${requests}`);
- assert.ok(requests>0,'real host must call model discovery');
+ assert.ok(requests>beforeRefresh,'real host must call model discovery');
+ const beforeAliasRefresh = requests;
  const aliases=await run('models','list','--refresh','--all','--provider','cpa','--json');
  assert.match(aliases,/smoke-model/);
+ assert.ok(requests>beforeAliasRefresh,'alias refresh must call model discovery');
  console.log('PASS: real host loads plugin and discovers both provider catalogs against local mock CPA');
 } finally {server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await rm(state,{recursive:true,force:true});}

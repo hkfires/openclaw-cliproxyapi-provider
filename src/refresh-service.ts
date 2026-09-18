@@ -14,7 +14,7 @@ export function resolveRefreshInterval(value: unknown): number {
 		seconds > 86400 ||
 		(seconds > 0 && seconds < 30)
 	) {
-		throw new Error("refreshIntervalSeconds 必须为 0（关闭）或 30–86400 的整数。");
+		throw new Error("refreshIntervalSeconds must be 0 (disabled) or an integer between 30 and 86400.");
 	}
 	return seconds * 1000;
 }
@@ -75,7 +75,7 @@ export function createRefreshService(
 									} catch {
 										if (!current.signal.aborted)
 											ctx.logger.warn(
-												`CLIProxyAPI 模型定时刷新失败 (${provider})，请检查网关认证；将在下一周期重试。`,
+												`CLIProxyAPI scheduled model refresh failed (${provider}). Check gateway credentials; will retry in the next cycle.`,
 											);
 									}
 								}

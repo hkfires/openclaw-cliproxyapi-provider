@@ -22,7 +22,7 @@
 				"type": "integer",
 				"default": 1800,
 				"anyOf": [{ "const": 0 }, { "minimum": 30, "maximum": 86400 }],
-				"description": "后台模型刷新间隔（秒），0 关闭，默认 1800。"
+				"description": "Background model refresh interval in seconds; 0 to disable, defaults to 1800."
 			}
 		},
 		"additionalProperties": false

@@ -11,19 +11,30 @@ afterEach(() => {
 	for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 	vi.unstubAllGlobals();
 });
-it("uses the host auth.run and returns a credential profile without saving the key in plugin config", async () => {
+it.each(["cliproxyapi", "cpa"])("returns valid model definitions and an auth profile for %s", async (providerId) => {
 	const dir = mkdtempSync(join(tmpdir(), "cpa-auth-"));
 	dirs.push(dir);
 	const text = vi.fn().mockResolvedValueOnce("http://localhost:8317").mockResolvedValueOnce("secret");
 	const ctx = { prompter: { text }, config: {} } as unknown as ProviderAuthContext;
 	vi.stubGlobal(
 		"fetch",
-		vi.fn(async () => new Response(JSON.stringify({ data: [{ id: "test" }] }))),
+		vi.fn(async () => new Response(JSON.stringify({ data: [{ id: "test" }, { id: "second" }] }))),
 	);
-	const result = await createAuthMethod(dir, "cliproxyapi").run(ctx);
-	expect(result.profiles[0].credential).toMatchObject({ type: "api_key", provider: "cliproxyapi", key: "secret" });
+	const result = await createAuthMethod(dir, providerId).run(ctx);
+	expect(result.profiles[0].credential).toMatchObject({ type: "api_key", provider: providerId, key: "secret" });
 	expect(loadConfigFile(dir).apiKey).toBeUndefined();
-	expect(result.defaultModel).toBe("cliproxyapi/test");
+	expect(result.defaultModel).toBe(`${providerId}/test`);
+	const provider = result.configPatch?.models?.providers?.[providerId];
+	expect(provider).toMatchObject({ baseUrl: "http://localhost:8317/v1", api: "openai-responses" });
+	expect(provider?.models?.map((model) => model.id)).toEqual(["test", "second"]);
+	for (const model of provider?.models ?? []) {
+		expect(model).not.toHaveProperty("provider");
+		expect(model).toMatchObject({
+			api: "openai-responses",
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		});
+	}
 	expect(text.mock.calls[1][0].sensitive).toBe(true);
 });
 it("does not save settings when authentication fails", async () => {
