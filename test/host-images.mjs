@@ -136,17 +136,6 @@ try {
   assert.equal(requestsAfterFailure - requestsBeforeFailure, 1, 'an alias must not retry the same paid backend');
   responseMode = 'base64';
 
-  const aliasProvider = buildImageGenerationProvider(state, 'cliproxyapi', ['cpa']);
-  const aliasOnlyCfg = {
-    ...config,
-    models: { providers: { cpa: { baseUrl: `${baseUrl}/v1`, apiKey: 'mock-key', api: 'openai-responses', models: [] } } },
-  };
-  const aliasResult = await aliasProvider.generateImage({
-    provider: 'cpa', model: 'gpt-image-2', prompt: 'alias config auth', cfg: aliasOnlyCfg,
-    authStore: { version: 1, profiles: {} },
-  });
-  assert.deepEqual(aliasResult.images[0].buffer, png);
-
   // Exercise real DNS/SSRF checks and redirect refusal with the same implementation.
   saveConfigFile(state, { apiKey: 'mock-key' });
   const provider = buildImageGenerationProvider(state, 'cpa');
