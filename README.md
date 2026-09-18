@@ -48,7 +48,7 @@ openclaw gateway restart
 
 ### 方式 1：交互式登录（推荐）
 
-运行登录向导，根据提示输入服务地址（回车默认 `http://127.0.0.1:8317`）与 API Key，并选择主模型及生图模型（多 Agent 环境需带上 `--agent` 认领凭据，模型默认值仍全局生效）：
+运行登录向导，根据提示输入服务地址（回车默认 `http://127.0.0.1:8317`）与 API Key，并按需选择主对话模型、识图理解模型（自动筛选支持看图的模型）及文生图模型（多 Agent 环境需带上 `--agent` 认领凭据，模型默认值仍全局生效）：
 
 ```sh
 openclaw models auth login --provider cliproxyapi --method api-key --set-default --agent main

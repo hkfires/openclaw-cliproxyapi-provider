@@ -84,6 +84,53 @@ export function createAuthMethod(configDir: string, providerId: string): Provide
 				}
 			}
 
+			const visionModels = chatModels.filter((m) => m.input?.includes("image"));
+			let visionModelId: string | undefined;
+			let visionFallbackIds: string[] = [];
+			if (visionModels.length > 0) {
+				const selected = await ctx.prompter.select<string>({
+					message: "Select an image understanding model (vision fallback, optional)",
+					options: [
+						{ value: "", label: "Skip and preserve current image understanding settings" },
+						...visionModels.map((m) => ({
+							value: m.id,
+							label: m.name,
+							hint: `${Math.round(m.contextWindow / 1000)}k ctx${m.reasoning ? " • Reasoning" : ""}`,
+						})),
+					],
+					initialValue: "",
+					searchable: true,
+				});
+				if (selected !== "") {
+					if (!visionModels.some((m) => m.id === selected)) {
+						throw Object.assign(new Error("Selected vision model is not in the vision catalog"), {
+							code: "INVALID_VISION_MODEL",
+						});
+					}
+					visionModelId = selected;
+					const fallbackOptions = visionModels
+						.filter((m) => m.id !== selected)
+						.map((m) => ({
+							value: m.id,
+							label: m.name,
+							hint: `${Math.round(m.contextWindow / 1000)}k ctx${m.reasoning ? " • Reasoning" : ""}`,
+						}));
+					if (fallbackOptions.length > 0) {
+						visionFallbackIds = await ctx.prompter.multiselect<string>({
+							message: "Select fallback image understanding models (optional)",
+							options: fallbackOptions,
+							searchable: true,
+						});
+						if (visionFallbackIds.some((id) => !fallbackOptions.some((option) => option.value === id))) {
+							throw Object.assign(new Error("Selected vision fallback is not in the vision catalog"), {
+								code: "INVALID_VISION_FALLBACK",
+							});
+						}
+						visionFallbackIds = [...new Set(visionFallbackIds)];
+					}
+				}
+			}
+
 			const imageModels = models.filter((m) => classifyModel(m.id) === "image");
 			let imageModelId: string | undefined;
 			let imageFallbackIds: string[] = [];
@@ -139,16 +186,38 @@ export function createAuthMethod(configDir: string, providerId: string): Provide
 					models: provider.models ?? [],
 				};
 			}
+
+			const allSelectedRefs = [
+				...new Set([
+					...(primaryModelId ? [primaryModelId, ...fallbackModelIds] : []),
+					...(visionModelId ? [visionModelId, ...visionFallbackIds] : []),
+				]),
+			].map((id) => `${providerId}/${id}`);
+
 			if (primaryModelId) {
-				const selectedRefs = [primaryModelId, ...fallbackModelIds].map((id) => `${providerId}/${id}`);
 				configPatch.agents = {
 					defaults: {
-						model: { primary: selectedRefs[0], fallbacks: selectedRefs.slice(1) },
+						model: {
+							primary: `${providerId}/${primaryModelId}`,
+							fallbacks: fallbackModelIds.map((id) => `${providerId}/${id}`),
+						},
 						...(ctx.config.agents?.defaults?.models
-							? { models: Object.fromEntries(selectedRefs.map((ref) => [ref, {}])) }
+							? { models: Object.fromEntries(allSelectedRefs.map((ref) => [ref, {}])) }
 							: {}),
 					},
 				};
+			}
+
+			if (visionModelId) {
+				configPatch.agents ??= {};
+				configPatch.agents.defaults ??= {};
+				configPatch.agents.defaults.imageModel = {
+					primary: `${providerId}/${visionModelId}`,
+					fallbacks: visionFallbackIds.map((id) => `${providerId}/${id}`),
+				};
+				if (ctx.config.agents?.defaults?.models) {
+					configPatch.agents.defaults.models = Object.fromEntries(allSelectedRefs.map((ref) => [ref, {}]));
+				}
 			}
 
 			if (imageModelId) {

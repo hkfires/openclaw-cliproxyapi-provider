@@ -47,6 +47,7 @@ export interface CodexClientModel {
 	context_window?: number;
 	max_context_window?: number;
 	input_modalities?: string[];
+	supports_image_detail_original?: boolean;
 	supported_reasoning_levels?: CodexReasoningLevel[] | string[];
 	default_service_tier?: string | null;
 	service_tiers?: Array<CodexServiceTier | string>;

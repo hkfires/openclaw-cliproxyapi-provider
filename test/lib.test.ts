@@ -280,6 +280,7 @@ describe("model mapping helpers", () => {
 	it("builds input modalities and guarantees text support", () => {
 		expect(buildInputModalities({ input_modalities: ["image"] })).toEqual(["text", "image"]);
 		expect(buildInputModalities({ input_modalities: ["text", "image"] })).toEqual(["text", "image"]);
+		expect(buildInputModalities({ supports_image_detail_original: true })).toEqual(["text", "image"]);
 		expect(buildInputModalities({})).toEqual(["text"]);
 	});
 

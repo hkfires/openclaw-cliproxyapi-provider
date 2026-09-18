@@ -264,6 +264,102 @@ it.each(["image", "image-fallback"])("rejects invalid %s selections", async (sta
 	expect(readFileSync(join(dir, lib.MODELS_CACHE_FILE_NAME), "utf8")).toBe(before.cache);
 });
 
+it("configures vision models when available and selected", async () => {
+	const { dir, ctx, select, multiselect } = fixture([
+		{ id: "chat-text" },
+		{ id: "vision-1", input_modalities: ["text", "image"] },
+		{ id: "vision-2", input_modalities: ["image"] },
+		{ id: "flux", visibility: "hide" },
+	]);
+	// 1: chat primary -> "chat-text"
+	select.mockResolvedValueOnce("chat-text");
+	// 1: chat fallback -> []
+	multiselect.mockResolvedValueOnce([]);
+	// 2: vision primary -> "vision-1"
+	select.mockResolvedValueOnce("vision-1");
+	// 2: vision fallback -> ["vision-2"]
+	multiselect.mockResolvedValueOnce(["vision-2"]);
+	// 3: image gen primary -> "" (skip)
+	select.mockResolvedValueOnce("");
+
+	const result = await createAuthMethod(dir, "cliproxyapi").run(ctx);
+	expect(result.configPatch?.agents?.defaults?.imageModel).toEqual({
+		primary: "cliproxyapi/vision-1",
+		fallbacks: ["cliproxyapi/vision-2"],
+	});
+	expect(result.configPatch?.agents?.defaults?.model).toEqual({
+		primary: "cliproxyapi/chat-text",
+		fallbacks: [],
+	});
+	expect(result.configPatch?.agents?.defaults?.mediaModels).toBeUndefined();
+});
+
+it("merges vision models into existing allowlist", async () => {
+	const config: ProviderAuthContext["config"] = {
+		agents: { defaults: { models: { "openai/gpt-4o": { alias: "vision" } } } },
+	};
+	const { dir, ctx, select, multiselect } = fixture(
+		[{ id: "chat-text" }, { id: "vision-1", input_modalities: ["text", "image"] }],
+		config,
+	);
+	select.mockResolvedValueOnce("chat-text");
+	multiselect.mockResolvedValueOnce([]);
+	select.mockResolvedValueOnce("vision-1");
+	multiselect.mockResolvedValueOnce([]);
+
+	const result = await createAuthMethod(dir, "cliproxyapi").run(ctx);
+	expect(result.configPatch?.agents?.defaults?.models).toEqual({
+		"cliproxyapi/chat-text": {},
+		"cliproxyapi/vision-1": {},
+	});
+});
+
+it.each(["vision", "vision-fallback"])("rejects invalid %s selections with stable error codes", async (stage) => {
+	const { dir, ctx, select, multiselect } = fixture([
+		{ id: "chat-text" },
+		{ id: "vision-1", input_modalities: ["text", "image"] },
+		{ id: "vision-2", input_modalities: ["text", "image"] },
+	]);
+	const before = seedConnection(dir);
+	select.mockResolvedValueOnce("chat-text");
+	multiselect.mockResolvedValueOnce([]);
+	if (stage === "vision") {
+		select.mockResolvedValueOnce("non-existent");
+	} else {
+		select.mockResolvedValueOnce("vision-1");
+		multiselect.mockResolvedValueOnce(["non-existent"]);
+	}
+	await expect(createAuthMethod(dir, "cliproxyapi").run(ctx)).rejects.toMatchObject({
+		code: stage === "vision" ? "INVALID_VISION_MODEL" : "INVALID_VISION_FALLBACK",
+	});
+	expect(readFileSync(join(dir, lib.CONFIG_FILE_NAME), "utf8")).toBe(before.config);
+	expect(readFileSync(join(dir, lib.MODELS_CACHE_FILE_NAME), "utf8")).toBe(before.cache);
+});
+
+it.each([
+	"vision",
+	"vision-fallback",
+])("preserves connection and cache when %s selection is cancelled", async (stage) => {
+	const { dir, ctx, select, multiselect } = fixture([
+		{ id: "chat-text" },
+		{ id: "vision-1", input_modalities: ["text", "image"] },
+		{ id: "vision-2", input_modalities: ["text", "image"] },
+	]);
+	const before = seedConnection(dir);
+	const cancelled = Object.assign(new Error("Cancelled"), { code: "TEST_CANCELLED" });
+	select.mockResolvedValueOnce("chat-text");
+	multiselect.mockResolvedValueOnce([]);
+	if (stage === "vision") {
+		select.mockRejectedValueOnce(cancelled);
+	} else {
+		select.mockResolvedValueOnce("vision-1");
+		multiselect.mockRejectedValueOnce(cancelled);
+	}
+	await expect(createAuthMethod(dir, "cliproxyapi").run(ctx)).rejects.toBe(cancelled);
+	expect(readFileSync(join(dir, lib.CONFIG_FILE_NAME), "utf8")).toBe(before.config);
+	expect(readFileSync(join(dir, lib.MODELS_CACHE_FILE_NAME), "utf8")).toBe(before.cache);
+});
+
 it("updates a legacy URL even when the catalog is empty, without changing the default model", async () => {
 	const { dir, ctx } = fixture([], {
 		models: { providers: { cpa: { baseUrl: "http://previous.test/v1", models: [] } } },

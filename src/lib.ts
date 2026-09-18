@@ -283,6 +283,9 @@ export function buildInputModalities(model: CodexClientModel): Array<"text" | "i
 			input.push(value);
 		}
 	}
+	if (model.supports_image_detail_original && !input.includes("image")) {
+		input.push("image");
+	}
 	if (!input.includes("text")) {
 		input.unshift("text");
 	}
