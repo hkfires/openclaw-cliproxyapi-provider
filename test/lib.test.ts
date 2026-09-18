@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	buildInputModalities,
 	CONFIG_FILE_NAME,
+	classifyModel,
 	createDynamicModel,
 	DEFAULT_API_DRIVER,
 	DEFAULT_BASE_URL,
@@ -240,6 +241,12 @@ describe("resolveIdentity", () => {
 });
 
 describe("resolveConnection", () => {
+	it("propagates malformed configuration instead of silently selecting the default endpoint", () => {
+		const dir = tempTestDir();
+		writeFileSync(join(dir, CONFIG_FILE_NAME), "invalid JSON");
+		expect(() => resolveConnection(dir, "test-key")).toThrow(SyntaxError);
+	});
+
 	it("resolves default connection without apiKey", () => {
 		const dir = tempTestDir();
 		const conn = resolveConnection(dir);
@@ -308,12 +315,51 @@ describe("model mapping helpers", () => {
 		});
 	});
 
-	it("ignores hidden models", () => {
+	it("includes models regardless of visibility attribute and annotates category", () => {
 		const model: CodexClientModel = {
-			id: "internal-hidden-model",
+			id: "gpt-image-2",
 			visibility: "hide",
 		};
-		expect(toOpenClawModel(model, "cliproxyapi")).toBeNull();
+		const mapped = toOpenClawModel(model, "cliproxyapi");
+		expect(mapped).not.toBeNull();
+		expect(mapped?.id).toBe("gpt-image-2");
+		expect(mapped?.name).toBe("gpt-image-2 [Image Gen]");
+	});
+
+	it.each([
+		"dall-e-3",
+		"gpt-image-2",
+		"gemini-3.1-flash-image",
+		"grok-imagine-video",
+	])("does not infer image input support from the generation model name %s", (id) => {
+		expect(toOpenClawModel({ id, input_modalities: ["text"] }, "cliproxyapi")?.input).toEqual(["text"]);
+		expect(toOpenClawModel({ id }, "cliproxyapi")?.input).toEqual(["text"]);
+		expect(toOpenClawModel({ id, input_modalities: ["text", "image"] }, "cliproxyapi")?.input).toEqual([
+			"text",
+			"image",
+		]);
+	});
+
+	it("does not use visibility as a capability discriminator", () => {
+		for (const visibility of ["list", "hide"]) {
+			expect(classifyModel({ slug: "gemini-3.1-flash-image", visibility })).toBe("image");
+			expect(toOpenClawModel({ slug: "gemini-3.1-flash-image", visibility }, "cpa")?.name).toContain("[Image Gen]");
+		}
+	});
+
+	it("classifies models correctly into chat, image, and video", () => {
+		expect(classifyModel("gpt-4o")).toBe("chat");
+		expect(classifyModel("claude-3-7-sonnet")).toBe("chat");
+		expect(classifyModel("deepseek-r1")).toBe("chat");
+		expect(classifyModel("gemini-3.1-flash-image")).toBe("image");
+		expect(classifyModel("gpt-image-2")).toBe("image");
+		expect(classifyModel("grok-imagine-image")).toBe("image");
+		expect(classifyModel("dall-e-3")).toBe("image");
+		expect(classifyModel("flux-1-dev")).toBe("image");
+		expect(classifyModel("grok-imagine-video")).toBe("video");
+		expect(classifyModel("grok-imagine-video-1.5-preview")).toBe("video");
+		expect(classifyModel("sora-1")).toBe("video");
+		expect(classifyModel("veo-2")).toBe("video");
 	});
 });
 

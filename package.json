@@ -33,6 +33,7 @@
 		"prepack": "npm run check && npm run build",
 		"test": "vitest run",
 		"test:host": "npm run build && node test/host-smoke.mjs",
+		"test:images": "npm run build && node test/host-images.mjs",
 		"test:refresh": "npm run build && node test/host-refresh.mjs",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",

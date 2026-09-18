@@ -3,6 +3,21 @@
 	"name": "CLIProxyAPI",
 	"version": "0.1.1",
 	"providers": ["cliproxyapi", "cpa"],
+	"contracts": {
+		"imageGenerationProviders": ["cliproxyapi"]
+	},
+	"imageGenerationProviderMetadata": {
+		"cliproxyapi": {
+			"aliases": ["cpa"],
+			"authProviders": ["cliproxyapi", "cpa"]
+		}
+	},
+	"setup": {
+		"providers": [
+			{ "id": "cliproxyapi", "envVars": ["CLIPROXYAPI_API_KEY", "CPA_API_KEY"] },
+			{ "id": "cpa", "envVars": ["CLIPROXYAPI_API_KEY", "CPA_API_KEY"] }
+		]
+	},
 	"providerCatalogEntry": "./dist/provider-discovery.js",
 	"providerAuthAliases": { "cpa": "cliproxyapi" },
 	"providerAuthChoices": [

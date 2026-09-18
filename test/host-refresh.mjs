@@ -20,7 +20,9 @@ const reserve=createServer();await new Promise(r=>reserve.listen(0,'127.0.0.1',r
 const port=reserve.address().port;await new Promise(r=>reserve.close(r));
 const cli=resolve('node_modules/openclaw/openclaw.mjs');
 const env={...process.env,OPENCLAW_STATE_DIR:state,OPENCLAW_CONFIG_PATH:join(state,'openclaw.json'),OPENCLAW_GATEWAY_PORT:String(port),OPENCLAW_GATEWAY_TOKEN:'local-smoke-gateway-key',CLIPROXYAPI_BASE_URL:`http://127.0.0.1:${server.address().port}`,CLIPROXYAPI_API_KEY:'smoke-key'};
-for(const k of ['CLIPROXYAPI_PROVIDER_ID','CPA_PROVIDER_ID','CLIPROXYAPI_API','CPA_API','CLIPROXYAPI_API_DRIVER','CPA_API_DRIVER','CLIPROXYAPI_FAST','CPA_FAST'])delete env[k];
+for(const k of Object.keys(env)) {
+ if (/^(CLIPROXYAPI_|CPA_|OPENCLAW_)/.test(k) && !['OPENCLAW_STATE_DIR','OPENCLAW_CONFIG_PATH','OPENCLAW_GATEWAY_PORT','OPENCLAW_GATEWAY_TOKEN','CLIPROXYAPI_BASE_URL','CLIPROXYAPI_API_KEY'].includes(k)) delete env[k];
+}
 await writeFile(env.OPENCLAW_CONFIG_PATH,JSON.stringify({gateway:{mode:'local',port,auth:{mode:'token',token:env.OPENCLAW_GATEWAY_TOKEN}},agents:{defaults:{model:{primary:'cliproxyapi/before-refresh',fallbacks:['cpa/before-refresh']}}},plugins:{allow:['cliproxyapi'],load:{paths:[resolve('.')]},entries:{cliproxyapi:{enabled:true,config:{refreshIntervalSeconds:30}}}}}));
 let logs='';
 const child=spawn(process.execPath,[cli,'gateway','run','--allow-unconfigured'],{env,stdio:['ignore','pipe','pipe']});
@@ -28,7 +30,18 @@ child.stdout.on('data',d=>{logs+=d;});child.stderr.on('data',d=>{logs+=d;});
 async function list(refresh=false){return (await exec(process.execPath,[cli,'models','list','--all','--provider','cliproxyapi','--json',...(refresh?['--refresh']:[])],{env,timeout:30000,maxBuffer:4*1024*1024})).stdout;}
 try{
  let ready=false;
- for(let i=0;i<30;i++){await delay(1000);if(child.exitCode!==null)throw new Error(logs);if(logs.includes('[gateway] ready')){ready=true;break;}}
+ for(let i=0;i<90;i++){
+  await delay(1000);
+  if(child.exitCode!==null)throw new Error(logs);
+  try {
+   const response=await fetch(`http://127.0.0.1:${port}/startupz`,{signal:AbortSignal.timeout(2000)});
+   if(response.status===200){ready=true;break;}
+   assert.equal(response.status,503,`unexpected startup probe status: ${response.status}`);
+  } catch(error) {
+   // Startup polling boundary: refusal is expected before HTTP binds; all other failures propagate.
+   if(error.cause?.code!=='ECONNREFUSED')throw error;
+  }
+ }
  assert.ok(ready,logs);
  assert.match(await list(true),/before-refresh/);
  const initialRequests=requests;modelId='after-refresh';

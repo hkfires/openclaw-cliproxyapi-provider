@@ -75,6 +75,8 @@ export interface OpenClawCost {
 	tiers?: OpenClawCostTier[];
 }
 
+export type ModelCategory = "chat" | "image" | "video";
+
 export interface OpenClawProviderModel {
 	id: string;
 	name: string;

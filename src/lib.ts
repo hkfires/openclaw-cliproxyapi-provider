@@ -233,12 +233,7 @@ export function resolveConnection(
 	configDir?: string,
 	extraApiKey?: string,
 ): ResolvedConnection & { apiDriver: "openai-responses" } {
-	let configFile: CliproxyConfigFile = {};
-	try {
-		configFile = loadConfigFile(configDir);
-	} catch {
-		configFile = {};
-	}
+	const configFile = loadConfigFile(configDir);
 
 	const apiDriver = resolveApiDriver(configFile);
 	const baseUrlInput = firstNonEmpty(
@@ -298,6 +293,30 @@ export function codexModelId(model: CodexClientModel): string {
 	return (model.slug ?? model.id ?? "").trim();
 }
 
+export type ModelCategory = "chat" | "image" | "video";
+
+const VIDEO_MODEL_PATTERN = /(?:^|[._/-])(video|sora|veo|kling|gen-?[23]|hailuo|minimax-video|luma-ray)(?:$|[._/-])/i;
+
+const IMAGE_GENERATION_MODEL_PATTERN =
+	/(?:^|[._/-])(image|imagen|imagine|flux|dall-?e|stable-diffusion|sdxl|midjourney|paint|draw)(?:$|[._/-])/i;
+
+export function classifyModel(model: CodexClientModel | string): ModelCategory {
+	const id = typeof model === "string" ? model.trim() : codexModelId(model);
+	if (!id) return "chat";
+
+	// 1. Check video generation (handles compound names like grok-imagine-video)
+	if (VIDEO_MODEL_PATTERN.test(id)) {
+		return "video";
+	}
+
+	// 2. Check image generation (e.g. gpt-image-2, grok-imagine-image, gemini-3.1-flash-image)
+	if (IMAGE_GENERATION_MODEL_PATTERN.test(id)) {
+		return "image";
+	}
+
+	return "chat";
+}
+
 export function supportsFastServiceTier(model: CodexClientModel): boolean {
 	return (
 		Array.isArray(model.service_tiers) &&
@@ -317,9 +336,16 @@ export function toOpenClawModel(
 	if (!id) {
 		return null;
 	}
-	if (String(model.visibility ?? "").toLowerCase() === "hide") {
-		return null;
+
+	const category = classifyModel(model);
+	let name = (model.display_name ?? model.name ?? id).trim() || id;
+	if (category === "image" && !/\[(?:image|\u751f\u56fe)/i.test(name)) {
+		name = `${name} [Image Gen]`;
+	} else if (category === "video" && !/\[(?:video|\u89c6\u9891)/i.test(name)) {
+		name = `${name} [Video Gen]`;
 	}
+
+	const input = buildInputModalities(model);
 
 	const efforts = extractReasoningEfforts(model);
 	const hasReasoning = efforts.some((effort) => effort !== "none");
@@ -337,11 +363,11 @@ export function toOpenClawModel(
 
 	const modelObj: OpenClawProviderModel = {
 		id,
-		name: (model.display_name ?? model.name ?? id).trim() || id,
+		name,
 		provider: providerId,
 		api: DEFAULT_API_DRIVER,
 		reasoning: hasReasoning,
-		input: buildInputModalities(model),
+		input,
 		cost,
 		contextWindow,
 		maxTokens: DEFAULT_MAX_TOKENS,

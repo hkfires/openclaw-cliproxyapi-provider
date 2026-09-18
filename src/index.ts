@@ -1,4 +1,5 @@
 import type { OpenClawPluginApi, OpenClawPluginDefinition } from "openclaw/plugin-sdk/core";
+import { buildImageGenerationProvider } from "./image-generation.js";
 import {
 	createDynamicModel,
 	fetchCodexModels,
@@ -115,11 +116,15 @@ export const plugin = {
 		const configDir = getOpenClawConfigDir();
 		const primary = buildProviderRegistration({ configDir, onLog: (level, msg) => api.logger[level](msg) });
 		api.registerProvider(primary);
+		api.registerImageGenerationProvider(
+			buildImageGenerationProvider(configDir, primary.id, primary.id === "cliproxyapi" ? ["cpa"] : []),
+		);
 		api.registerService(createRefreshService(primary.id === "cliproxyapi" ? [primary.id, "cpa"] : [primary.id]));
-		if (primary.id === "cliproxyapi")
+		if (primary.id === "cliproxyapi") {
 			api.registerProvider(
 				buildProviderRegistration({ configDir, providerId: "cpa", onLog: (level, msg) => api.logger[level](msg) }),
 			);
+		}
 	},
 } satisfies OpenClawPluginDefinition;
 export default plugin;
