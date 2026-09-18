@@ -1,0 +1,30 @@
+{
+	"id": "cliproxyapi",
+	"name": "CLIProxyAPI",
+	"version": "0.1.0",
+	"providers": ["cliproxyapi", "cpa"],
+	"providerCatalogEntry": "./dist/provider-discovery.js",
+	"providerAuthAliases": { "cpa": "cliproxyapi" },
+	"providerAuthChoices": [
+		{
+			"provider": "cliproxyapi",
+			"method": "api-key",
+			"choiceId": "cliproxyapi-api-key",
+			"choiceLabel": "CLIProxyAPI",
+			"groupId": "cliproxyapi",
+			"groupLabel": "CLIProxyAPI"
+		}
+	],
+	"configSchema": {
+		"type": "object",
+		"properties": {
+			"refreshIntervalSeconds": {
+				"type": "integer",
+				"default": 1800,
+				"anyOf": [{ "const": 0 }, { "minimum": 30, "maximum": 86400 }],
+				"description": "后台模型刷新间隔（秒），0 关闭，默认 1800。"
+			}
+		},
+		"additionalProperties": false
+	}
+}

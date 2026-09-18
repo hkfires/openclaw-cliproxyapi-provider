@@ -1,0 +1,74 @@
+{
+	"name": "openclaw-cliproxyapi-provider",
+	"version": "0.1.0",
+	"description": "OpenClaw provider plugin that auto-registers CLIProxyAPI models with models.dev pricing",
+	"type": "module",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"keywords": [
+		"openclaw",
+		"openclaw-plugin",
+		"openclaw-provider",
+		"cliproxyapi",
+		"llm",
+		"provider"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/hkfires/openclaw-cliproxyapi-provider.git"
+	},
+	"homepage": "https://github.com/hkfires/openclaw-cliproxyapi-provider#readme",
+	"bugs": {
+		"url": "https://github.com/hkfires/openclaw-cliproxyapi-provider/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"node": ">=24.16.0 <25 || >=26.1.0"
+	},
+	"scripts": {
+		"build": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\" && tsc",
+		"prepack": "npm run check && npm run build",
+		"test": "vitest run",
+		"test:host": "npm run build && node test/host-smoke.mjs",
+		"test:refresh": "npm run build && node test/host-refresh.mjs",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check .",
+		"format": "biome check --write .",
+		"check": "npm run typecheck && npm run lint && npm run test"
+	},
+	"openclaw": {
+		"extensions": [
+			"./dist/index.js"
+		],
+		"compat": {
+			"pluginApi": ">=2026.9.4",
+			"minGatewayVersion": "2026.9.4"
+		}
+	},
+	"peerDependencies": {
+		"openclaw": ">=2026.9.4"
+	},
+	"peerDependenciesMeta": {
+		"openclaw": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.3",
+		"@types/node": "^22.15.21",
+		"openclaw": "2026.9.4",
+		"typescript": "6.0.3",
+		"vitest": "4.1.11"
+	},
+	"files": [
+		"dist",
+		"src",
+		"openclaw.plugin.json",
+		"cliproxyapi.example.json",
+		"README.md",
+		"LICENSE"
+	]
+}
