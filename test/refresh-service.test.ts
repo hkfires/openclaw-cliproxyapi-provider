@@ -19,23 +19,25 @@ it("validates intervals and defaults to thirty minutes", () => {
 	expect(resolveRefreshInterval(0)).toBe(0);
 	for (const value of [-1, 1, 29, 1.5, "300", 86401, NaN]) expect(() => resolveRefreshInterval(value)).toThrow();
 });
-it("refreshes the host catalog periodically and stops cleanly", async () => {
+it("refreshes the host catalog immediately on start and periodically thereafter, and stops cleanly", async () => {
 	const { service, request, ctx } = fixture();
 	service.start(ctx);
-	await vi.advanceTimersByTimeAsync(29999);
-	expect(request).not.toHaveBeenCalled();
-	await vi.advanceTimersByTimeAsync(1);
+	await vi.advanceTimersByTimeAsync(0);
 	expect(request).toHaveBeenCalledTimes(2);
 	expect(request).toHaveBeenCalledWith(
 		process.execPath,
 		expect.arrayContaining(["models", "list", "--refresh", "--provider", "cliproxyapi"]),
 		expect.objectContaining({ timeout: 240000, signal: expect.any(AbortSignal) }),
 	);
-	await vi.advanceTimersByTimeAsync(30000);
+	await vi.advanceTimersByTimeAsync(29999);
+	expect(request).toHaveBeenCalledTimes(2);
+	await vi.advanceTimersByTimeAsync(1);
 	expect(request).toHaveBeenCalledTimes(4);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(request).toHaveBeenCalledTimes(6);
 	service.stop!(ctx);
 	await vi.advanceTimersByTimeAsync(90000);
-	expect(request).toHaveBeenCalledTimes(4);
+	expect(request).toHaveBeenCalledTimes(6);
 });
 it("does not overlap requests, and stop prevents alias dispatch and rescheduling", async () => {
 	const { service, request, ctx } = fixture();
@@ -63,9 +65,10 @@ it("retries after failures without logging their contents", async () => {
 	const { service, request, ctx } = fixture();
 	request.mockRejectedValueOnce(new Error("secret"));
 	service.start(ctx);
-	await vi.advanceTimersByTimeAsync(30000);
+	await vi.advanceTimersByTimeAsync(0);
 	expect(ctx.logger.warn).toHaveBeenCalledTimes(1);
 	expect(JSON.stringify(ctx.logger.warn.mock.calls)).not.toContain("secret");
+	expect(request).toHaveBeenCalledTimes(2);
 	await vi.advanceTimersByTimeAsync(30000);
 	expect(request).toHaveBeenCalledTimes(4);
 	service.stop!(ctx);
@@ -77,7 +80,9 @@ it("supports disabling and updated configuration on service restart", async () =
 	expect(request).not.toHaveBeenCalled();
 	ctx.config.plugins.entries.cliproxyapi.config.refreshIntervalSeconds = 30;
 	service.start(ctx);
-	await vi.advanceTimersByTimeAsync(30000);
+	await vi.advanceTimersByTimeAsync(0);
 	expect(request).toHaveBeenCalledTimes(2);
+	await vi.advanceTimersByTimeAsync(30000);
+	expect(request).toHaveBeenCalledTimes(4);
 	service.stop!(ctx);
 });
