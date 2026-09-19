@@ -264,11 +264,20 @@ export function createAuthMethod(configDir: string, providerId: string): Provide
 				const provider = ctx.config.models?.providers?.[id];
 				if (!provider) continue;
 				configPatch.models ??= { providers: {} };
+				const syncedModels = (provider.models ?? []).map((pm) => {
+					const discovered = models.find((m) => m.id === pm.id);
+					if (!discovered) return pm;
+					return {
+						...pm,
+						contextWindow: discovered.contextWindow,
+						maxTokens: discovered.maxTokens,
+					};
+				});
 				configPatch.models.providers![id] = {
 					...provider,
 					baseUrl: endpoints.inferenceBaseUrl,
 					api: "openai-responses",
-					models: provider.models ?? [],
+					models: syncedModels,
 				};
 			}
 

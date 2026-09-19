@@ -73,4 +73,16 @@ describe("SDK catalog contract", () => {
 		const result = await reg.catalog!.run(ctx);
 		expect(result && "provider" in result && result.provider.models).toEqual([]);
 	});
+	it("resolves dynamic model using cached contextWindow and limits when available", async () => {
+		const { reg, ctx } = fixture();
+		mockCatalog({
+			data: [{ id: "gemini-3.8-flash-high", context_length: 1048576, max_completion_tokens: 65536 }],
+		});
+		await reg.catalog!.run(ctx);
+		const dynamic = reg.resolveDynamicModel!({
+			modelId: "gemini-3.8-flash-high",
+		} as unknown as Parameters<NonNullable<typeof reg.resolveDynamicModel>>[0]);
+		expect(dynamic?.contextWindow).toBe(1048576);
+		expect(dynamic?.maxTokens).toBe(65536);
+	});
 });

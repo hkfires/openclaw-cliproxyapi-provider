@@ -84,6 +84,15 @@ export function buildProviderRegistration(
 		},
 		resolveDynamicModel(ctx) {
 			const conn = resolveConnection(configDir);
+			const cached = loadModelsCache(configDir, conn.baseUrlInput);
+			const cachedModel = cached?.models.find((m) => m.id === ctx.modelId);
+			if (cachedModel) {
+				return {
+					...cachedModel,
+					provider: id,
+					baseUrl: ctx.providerConfig?.baseUrl ?? conn.inferenceBaseUrl,
+				};
+			}
 			return createDynamicModel(
 				ctx.modelId,
 				id,

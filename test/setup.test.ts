@@ -118,6 +118,35 @@ it.each([
 	expect(lib.loadConfigFile(dir)).toEqual({ baseUrl: "http://localhost:8317", api: "openai-responses", fast: true });
 });
 
+it("updates stale limits for existing provider models matching newly discovered models", async () => {
+	const oldProvider = {
+		baseUrl: "http://previous.test/v1",
+		api: "openai-responses" as const,
+		models: [
+			{ id: "gemini-3.7-flash-high", name: "Gemini", contextWindow: 128000, maxTokens: 16384 },
+			{ id: "manual-model", name: "Custom", contextWindow: 8192 },
+		],
+	};
+	const config: ProviderAuthContext["config"] = {
+		models: {
+			providers: {
+				cliproxyapi: structuredClone(oldProvider),
+			},
+		},
+	};
+	const { dir, ctx } = fixture(
+		[{ id: "gemini-3.7-flash-high", context_length: 1048576, max_completion_tokens: 65536 }],
+		config,
+	);
+	seedConnection(dir);
+	const result = await createAuthMethod(dir, "cliproxyapi").run(ctx);
+	const synced = result.configPatch?.models?.providers?.cliproxyapi?.models;
+	expect(synced).toEqual([
+		{ id: "gemini-3.7-flash-high", name: "Gemini", contextWindow: 1048576, maxTokens: 65536 },
+		{ id: "manual-model", name: "Custom", contextWindow: 8192 },
+	]);
+});
+
 it("separates image selection and preserves existing vision/media settings when skipped", async () => {
 	const config: ProviderAuthContext["config"] = {
 		agents: {
