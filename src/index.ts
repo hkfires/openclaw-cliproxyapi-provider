@@ -30,12 +30,11 @@ export function buildProviderRegistration(
 	const configDir = options.configDir ?? getOpenClawConfigDir();
 	const identity = resolveIdentity(loadConfigFile(configDir));
 	const id = options.providerId ?? identity.providerId;
-	const aliases = options.aliases ?? (id === "cliproxyapi" ? ["cpa"] : []);
 	const fastMode = resolveFastDefault(loadConfigFile(configDir));
 	const fastModels = new Set<string>();
 	return {
 		id,
-		aliases,
+		...(options.aliases ? { aliases: options.aliases } : {}),
 		label: identity.providerName,
 		envVars: ["CLIPROXYAPI_API_KEY", "CPA_API_KEY"],
 		auth: [createAuthMethod(configDir, id)],
@@ -128,11 +127,10 @@ export const plugin = {
 		const configDir = getOpenClawConfigDir();
 		const primary = buildProviderRegistration({
 			configDir,
-			aliases: ["cpa"],
 			onLog: (level, msg) => api.logger[level](msg),
 		});
 		api.registerProvider(primary);
-		api.registerImageGenerationProvider(buildImageGenerationProvider(configDir, primary.id, ["cpa"]));
+		api.registerImageGenerationProvider(buildImageGenerationProvider(configDir, primary.id));
 		api.registerService(createRefreshService([primary.id]));
 	},
 } satisfies OpenClawPluginDefinition;

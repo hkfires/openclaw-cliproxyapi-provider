@@ -8,25 +8,13 @@
 	},
 	"imageGenerationProviderMetadata": {
 		"cliproxyapi": {
-			"aliases": ["cpa"],
-			"authProviders": ["cliproxyapi", "cpa"]
+			"authProviders": ["cliproxyapi"]
 		}
 	},
 	"setup": {
-		"providers": [
-			{ "id": "cliproxyapi", "envVars": ["CLIPROXYAPI_API_KEY", "CPA_API_KEY"] },
-			{ "id": "cpa", "envVars": ["CLIPROXYAPI_API_KEY", "CPA_API_KEY"] }
-		]
+		"providers": [{ "id": "cliproxyapi", "envVars": ["CLIPROXYAPI_API_KEY", "CPA_API_KEY"] }]
 	},
 	"providerCatalogEntry": "./dist/provider-discovery.js",
-	"providerAuthAliases": { "cpa": "cliproxyapi" },
-	"modelCatalog": {
-		"aliases": {
-			"cpa": {
-				"provider": "cliproxyapi"
-			}
-		}
-	},
 	"providerAuthChoices": [
 		{
 			"provider": "cliproxyapi",

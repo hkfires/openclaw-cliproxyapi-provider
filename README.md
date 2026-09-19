@@ -10,7 +10,6 @@
 - **即开即用**：自动拉取可用模型目录、上下文窗口及多模态输入配置。
 - **对话与生图**：支持文本对话（Responses 协议）及文生图 / 参考图编辑（`/v1/images/*`）。
 - **后台自动同步**：定时静默更新上游模型目录，感知渠道变动无需重启网关。
-- **双前缀别名**：同时支持 `cliproxyapi/` 与 `cpa/` 前缀。
 - **官方参考定价**：自动匹配 models.dev 基准费率，便于统计用量。
 
 ---
@@ -70,14 +69,14 @@ openclaw models auth login --provider cliproxyapi --method api-key --set-default
 
 ### 1. 对话模型
 
-支持使用 `cliproxyapi/` 或简写 `cpa/`：
+使用 `cliproxyapi/` 前缀：
 
 ```sh
 # 设置主模型
-openclaw models set cpa/gpt-4o
+openclaw models set cliproxyapi/gpt-4o
 
 # 对话中即时切换
-/model cpa/claude-3-7-sonnet-20250219
+/model cliproxyapi/claude-3-7-sonnet-20250219
 ```
 
 ### 2. 查看与刷新模型
@@ -96,10 +95,10 @@ openclaw models list --refresh --all --provider cliproxyapi
 
 ```sh
 # 文生图
-openclaw infer image generate --model cpa/gpt-image-2 --prompt "A cozy wooden cabin in the snow" --output ./cabin.png
+openclaw infer image generate --model cliproxyapi/gpt-image-2 --prompt "A cozy wooden cabin in the snow" --output ./cabin.png
 
 # 参考图编辑
-openclaw infer image edit --model cpa/gpt-image-2 --file ./cabin.png --prompt "Change the scene to summer with green grass" --output ./cabin-summer.png
+openclaw infer image edit --model cliproxyapi/gpt-image-2 --file ./cabin.png --prompt "Change the scene to summer with green grass" --output ./cabin-summer.png
 ```
 
 ---

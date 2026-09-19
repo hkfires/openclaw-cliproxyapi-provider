@@ -2,7 +2,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import { expect, it, vi } from "vitest";
 import plugin from "../src/index.js";
 
-it("registers canonical provider with cpa alias and executable host auth methods", () => {
+it("registers canonical provider and executable host auth methods", () => {
 	const registerProvider = vi.fn();
 	const registerImageGenerationProvider = vi.fn();
 	plugin.register({
@@ -15,11 +15,11 @@ it("registers canonical provider with cpa alias and executable host auth methods
 	expect(registerProvider).toHaveBeenCalledOnce();
 	const chatProvider = registerProvider.mock.calls[0][0];
 	expect(chatProvider.id).toBe("cliproxyapi");
-	expect(chatProvider.aliases).toEqual(["cpa"]);
+	expect(chatProvider.aliases).toBeUndefined();
 	expect(registerImageGenerationProvider).toHaveBeenCalledOnce();
 	const imageProvider = registerImageGenerationProvider.mock.calls[0][0];
 	expect(imageProvider.id).toBe("cliproxyapi");
-	expect(imageProvider.aliases).toEqual(["cpa"]);
+	expect(imageProvider.aliases).toBeUndefined();
 	expect(imageProvider.defaultModel).toBeUndefined();
 	expect(typeof imageProvider.generateImage).toBe("function");
 	expect(imageProvider.capabilities.edit.enabled).toBe(true);

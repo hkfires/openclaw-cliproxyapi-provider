@@ -101,9 +101,9 @@ try {
   const inspection = JSON.parse(await run('plugins', 'inspect', 'cliproxyapi', '--runtime', '--json'));
   assert.deepEqual(inspection.plugin.imageGenerationProviderIds, ['cliproxyapi']);
   // No API-key environment variable or plugin-file key: use the persisted auth profile.
-  for (const id of ['cliproxyapi', 'cpa']) {
-    const output = join(state, `${id}.png`);
-    const result = JSON.parse(await run('infer', 'image', 'generate', '--model', `${id}/gpt-image-2`, '--prompt', 'mock generation', '--quality', 'high', '--output-format', 'jpeg', '--background', 'opaque', '--output', output, '--json'));
+  {
+    const output = join(state, 'cliproxyapi.png');
+    const result = JSON.parse(await run('infer', 'image', 'generate', '--model', 'cliproxyapi/gpt-image-2', '--prompt', 'mock generation', '--quality', 'high', '--output-format', 'jpeg', '--background', 'opaque', '--output', output, '--json'));
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.deepEqual(await readFile(output), png);
     const posted = JSON.parse(records.at(-1).body);
@@ -113,11 +113,15 @@ try {
     assert.equal(posted.output_format, 'jpeg');
     assert.equal(posted.background, 'opaque');
   }
-  await run('infer', 'image', 'generate', '--model', 'cpa/gpt-image-1.5', '--prompt', 'mock transparent', '--background', 'transparent', '--output', join(state, 'transparent.png'), '--json');
+  // Removed aliases must fail at the host boundary without reaching the backend.
+  const requestsBeforeAlias = records.length;
+  await assert.rejects(run('infer', 'image', 'generate', '--model', 'cpa/gpt-image-2', '--prompt', 'removed alias', '--output', join(state, 'removed-alias.png'), '--json'), { code: 1 });
+  assert.equal(records.length, requestsBeforeAlias, 'removed alias must not send a backend request');
+  await run('infer', 'image', 'generate', '--model', 'cliproxyapi/gpt-image-1.5', '--prompt', 'mock transparent', '--background', 'transparent', '--output', join(state, 'transparent.png'), '--json');
   assert.equal(JSON.parse(records.at(-1).body).background, 'transparent');
   responseMode = 'url';
   const edited = join(state, 'edited.png');
-  const edit = JSON.parse(await run('infer', 'image', 'edit', '--model', 'cpa/grok-imagine-image', '--prompt', 'mock edit', '--file', join(state, 'cpa.png'), '--output', edited, '--json'));
+  const edit = JSON.parse(await run('infer', 'image', 'edit', '--model', 'cliproxyapi/grok-imagine-image', '--prompt', 'mock edit', '--file', join(state, 'cliproxyapi.png'), '--output', edited, '--json'));
   assert.equal(edit.ok, true, JSON.stringify(edit));
   assert.deepEqual(await readFile(edited), png);
   const editRequest = records.find(record => record.path.endsWith('/edits'));
@@ -127,19 +131,19 @@ try {
   assert.equal(assetHits, 1);
   assert.equal(records.at(-1).authorization, undefined);
 
-  config.agents.defaults.mediaModels.image = { primary: 'cpa/gpt-image-2', fallbacks: [] };
+  config.agents.defaults.mediaModels.image = { primary: 'cliproxyapi/gpt-image-2', fallbacks: [] };
   await writeFile(process.env.OPENCLAW_CONFIG_PATH, JSON.stringify(config));
   responseMode = 'error';
   const requestsBeforeFailure = records.filter(record => record.path.endsWith('/generations')).length;
   await assert.rejects(run('infer', 'image', 'generate', '--prompt', 'expected failure', '--output', join(state, 'failure.png'), '--json'));
   const requestsAfterFailure = records.filter(record => record.path.endsWith('/generations')).length;
-  assert.equal(requestsAfterFailure - requestsBeforeFailure, 1, 'an alias must not retry the same paid backend');
+  assert.equal(requestsAfterFailure - requestsBeforeFailure, 1, 'a failed generation must not retry the same paid backend');
   responseMode = 'base64';
 
   // Exercise real DNS/SSRF checks and redirect refusal with the same implementation.
   saveConfigFile(state, { apiKey: 'mock-key' });
-  const provider = buildImageGenerationProvider(state, 'cpa');
-  const req = { provider: 'cpa', model: 'gpt-image-2', prompt: 'security test', cfg: config };
+  const provider = buildImageGenerationProvider(state, 'cliproxyapi');
+  const req = { provider: 'cliproxyapi', model: 'gpt-image-2', prompt: 'security test', cfg: config };
   await assert.rejects(provider.generateImage({ ...req, cfg: {} }), SsrFBlockedError);
   responseMode = 'foreign-private';
   await assert.rejects(provider.generateImage(req), SsrFBlockedError);
@@ -152,7 +156,7 @@ try {
   assert.equal(foreignHits, 0);
   responseMode = 'slow';
   await assert.rejects(provider.generateImage({ ...req, timeoutMs: 100 }), { name: /^(TimeoutError|AbortError)$/ });
-  console.log('PASS: real host image generation/edit via CPA, auth-profile alias reuse, config preservation, URL download, SSRF/redirect refusal, and timeout');
+  console.log('PASS: real host image generation/edit via CPA, persisted auth, removed alias rejection, config preservation, URL download, SSRF/redirect refusal, and timeout');
 } finally {
   server.closeAllConnections(); foreign.closeAllConnections();
   await Promise.all([new Promise(resolve => server.close(resolve)), new Promise(resolve => foreign.close(resolve))]);
