@@ -122,7 +122,7 @@ export function buildProviderRegistration(
 
 export const plugin = {
 	id: "cliproxyapi",
-	name: "CLIProxyAPI",
+	name: "CLIProxyAPI Provider",
 	register(api: OpenClawPluginApi) {
 		const configDir = getOpenClawConfigDir();
 		const primary = buildProviderRegistration({

@@ -1,6 +1,6 @@
 {
 	"id": "cliproxyapi",
-	"name": "CLIProxyAPI",
+	"name": "CLIProxyAPI Provider",
 	"version": "0.1.6",
 	"providers": ["cliproxyapi"],
 	"contracts": {

@@ -3,6 +3,8 @@ import { expect, it, vi } from "vitest";
 import plugin from "../src/index.js";
 
 it("registers canonical provider and executable host auth methods", () => {
+	expect(plugin.id).toBe("cliproxyapi");
+	expect(plugin.name).toBe("CLIProxyAPI Provider");
 	const registerProvider = vi.fn();
 	const registerImageGenerationProvider = vi.fn();
 	plugin.register({
