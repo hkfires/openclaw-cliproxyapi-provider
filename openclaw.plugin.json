@@ -2,7 +2,7 @@
 	"id": "cliproxyapi",
 	"name": "CLIProxyAPI Provider",
 	"description": "OpenClaw provider plugin for CLIProxyAPI with automatic model discovery, image generation, and models.dev pricing",
-	"version": "0.1.6",
+	"version": "0.1.7",
 	"providers": ["cliproxyapi"],
 	"contracts": {
 		"imageGenerationProviders": ["cliproxyapi"]
