@@ -73,6 +73,20 @@ it("retries after failures without logging their contents", async () => {
 	expect(request).toHaveBeenCalledTimes(4);
 	service.stop!(ctx);
 });
+it.each([
+	["entries", { entries: { main: {}, work: {} } }],
+	["legacy list", { list: [{ id: "main" }, { id: "work" }, { id: "main" }] }],
+])("refreshes every configured agent from %s", async (_shape, agents) => {
+	const { service, request, ctx } = fixture();
+	service.start({ ...ctx, config: { ...ctx.config, agents } } as unknown as OpenClawPluginServiceContext);
+	await vi.advanceTimersByTimeAsync(0);
+	const targets = request.mock.calls.map(([, args]: [string, string[]]) => {
+		const agent = args.indexOf("--agent");
+		return `${args[args.indexOf("--provider") + 1]}@${agent >= 0 ? args[agent + 1] : ""}`;
+	});
+	expect(targets).toEqual(["cliproxyapi@main", "cpa@main", "cliproxyapi@work", "cpa@work"]);
+	service.stop!(ctx);
+});
 it("supports disabling and updated configuration on service restart", async () => {
 	const { service, request, ctx } = fixture(0);
 	service.start(ctx);

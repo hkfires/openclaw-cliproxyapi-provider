@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { stagePlugin } from './host-stage.mjs';
 
 const exec = promisify(execFile);
 const state = await mkdtemp(join(tmpdir(), 'cpa-host-images-'));
@@ -56,7 +57,11 @@ try {
   const { SsrFBlockedError, GuardedFetchRedirectError } = await import('openclaw/plugin-sdk/ssrf-runtime');
   const dist = resolve('node_modules/openclaw/dist');
   const file = (await readdir(dist)).find(name => /^provider-auth-choice-helpers-.*\.mjs$/.test(name));
-  const { n: mergeAuthPatch } = await import(pathToFileURL(join(dist, file)).href);
+  // Chunk export letters are minifier-assigned and change between host releases; match the function name.
+  const mergeAuthPatch = Object.values(await import(pathToFileURL(join(dist, file)).href))
+    .find(fn => typeof fn === 'function' && fn.name === 'applyProviderAuthConfigPatch');
+  assert.ok(mergeAuthPatch, 'host auth-patch merger export must be available');
+  const pluginDir = await stagePlugin(state);
   const baseUrl = `http://127.0.0.1:${server.address().port}/proxy`;
   let config = {
     agents: { defaults: {
@@ -66,7 +71,7 @@ try {
     } },
     // Explicit opt-in for the local mock only; never a production default.
     browser: { ssrfPolicy: { dangerouslyAllowPrivateNetwork: true } },
-    plugins: { allow: ['cliproxyapi'], load: { paths: [resolve('.')] }, entries: { cliproxyapi: { enabled: true } } },
+    plugins: { allow: ['cliproxyapi'], load: { paths: [pluginDir] }, entries: { cliproxyapi: { enabled: true } } },
   };
   const answers = [baseUrl, 'mock-key'];
   const result = await createAuthMethod(state, 'cliproxyapi').run({

@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { buildProviderRegistration } from '../dist/index.js';
 import { createAuthMethod } from '../dist/setup-entry.js';
+import { stagePlugin } from './host-stage.mjs';
 
 const exec = promisify(execFile);
 const state = await mkdtemp(join(tmpdir(), 'cpa-host-'));
@@ -43,11 +44,15 @@ try {
   // Deliberately no base-URL environment override: inference must use saved settings.
   const env = { ...process.env };
   const cli = resolve('node_modules/openclaw/openclaw.mjs');
+  const pluginDir = await stagePlugin(state);
   // Exercise the pinned host's actual auth-patch merge, not a test imitation.
   const hostDist = resolve('node_modules/openclaw/dist');
   const helperFile = (await readdir(hostDist)).find(name => /^provider-auth-choice-helpers-.*\.mjs$/.test(name));
   assert.ok(helperFile, 'host auth-patch merger must be available');
-  const { n: applyProviderAuthConfigPatch } = await import(pathToFileURL(join(hostDist, helperFile)).href);
+  // Chunk export letters are minifier-assigned and change between host releases; match the function name.
+  const applyProviderAuthConfigPatch = Object.values(await import(pathToFileURL(join(hostDist, helperFile)).href))
+    .find(fn => typeof fn === 'function' && fn.name === 'applyProviderAuthConfigPatch');
+  assert.ok(applyProviderAuthConfigPatch, 'host auth-patch merger export must be available');
   async function run(...args) {
     const { stdout, stderr } = await exec(process.execPath, [cli, ...args], {
       env, timeout: 90000, maxBuffer: 8 * 1024 * 1024,
@@ -65,7 +70,7 @@ try {
   for (const legacy of [false, true]) {
     let config = {
       agents: { defaults: { imageModel: vision, mediaModels: media, models: { 'openai/gpt-4o': { alias: 'vision' } } } },
-      plugins: { allow: ['cliproxyapi'], load: { paths: [resolve('.')] }, entries: { cliproxyapi: { enabled: true } } },
+      plugins: { allow: ['cliproxyapi'], load: { paths: [pluginDir] }, entries: { cliproxyapi: { enabled: true } } },
       ...(legacy ? { models: { providers: { cliproxyapi: oldRoute, cpa: oldRoute } } } : {}),
     };
     for (const id of ['cliproxyapi', 'cpa']) {

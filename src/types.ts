@@ -8,8 +8,6 @@ export interface CliproxyConfigFile {
 	providerId?: string;
 	providerName?: string;
 	fast?: boolean;
-	pause?: boolean;
-	pricing?: boolean;
 	/** Legacy config input; validated at runtime to accept only openai-responses. */
 	api?: string;
 }
@@ -24,7 +22,6 @@ export interface ResolvedConnection {
 	apiKey?: string;
 	inferenceBaseUrl: string;
 	modelsUrl: string;
-	rootOrigin: string;
 }
 
 export interface CodexReasoningLevel {
@@ -84,8 +81,6 @@ export interface OpenClawCost {
 	cacheWrite: number;
 	tiers?: OpenClawCostTier[];
 }
-
-export type ModelCategory = "chat" | "image" | "video";
 
 export interface OpenClawProviderModel {
 	id: string;

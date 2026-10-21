@@ -1,6 +1,7 @@
 import type { OpenClawPluginApi, OpenClawPluginDefinition } from "openclaw/plugin-sdk/core";
 import { buildImageGenerationProvider } from "./image-generation.js";
 import {
+	codexModelId,
 	createDynamicModel,
 	fetchCodexModels,
 	fetchModelsDevCostMap,
@@ -23,18 +24,17 @@ export function buildProviderRegistration(
 	options: {
 		configDir?: string;
 		providerId?: string;
-		aliases?: string[];
 		onLog?: (level: "info" | "warn" | "error", message: string) => void;
 	} = {},
 ): Provider {
 	const configDir = options.configDir ?? getOpenClawConfigDir();
-	const identity = resolveIdentity(loadConfigFile(configDir));
+	const configFile = loadConfigFile(configDir);
+	const identity = resolveIdentity(configFile);
 	const id = options.providerId ?? identity.providerId;
-	const fastMode = resolveFastDefault(loadConfigFile(configDir));
+	const fastMode = resolveFastDefault(configFile);
 	const fastModels = new Set<string>();
 	return {
 		id,
-		...(options.aliases ? { aliases: options.aliases } : {}),
 		label: identity.providerName,
 		envVars: ["CLIPROXYAPI_API_KEY", "CPA_API_KEY"],
 		auth: [createAuthMethod(configDir, id)],
@@ -54,7 +54,7 @@ export function buildProviderRegistration(
 						fetchModelsDevCostMap(configDir),
 					]);
 					fastModels.clear();
-					for (const m of remote) if (supportsFastServiceTier(m)) fastModels.add((m.slug ?? m.id ?? "").trim());
+					for (const m of remote) if (supportsFastServiceTier(m)) fastModels.add(codexModelId(m));
 					models = remote.map((m) => toOpenClawModel(m, id, costs, fastMode)).filter((m) => m !== null);
 					try {
 						saveModelsCache(configDir, {

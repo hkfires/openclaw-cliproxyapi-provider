@@ -1,6 +1,7 @@
 import type { ProviderAuthContext, ProviderAuthMethod, ProviderAuthResult } from "openclaw/plugin-sdk/core";
 import {
 	classifyModel,
+	codexModelId,
 	DEFAULT_BASE_URL,
 	fetchCodexModels,
 	fetchModelsDevCostMap,
@@ -127,7 +128,7 @@ export function createAuthMethod(configDir: string, providerId: string): Provide
 				fetchModelsDevCostMap(configDir, false, ctx.signal).catch(() => undefined),
 			]);
 			const fastMode = resolveFastDefault(existing);
-			const fastModelIds = remote.filter(supportsFastServiceTier).map((m) => (m.slug ?? m.id ?? "").trim());
+			const fastModelIds = remote.filter(supportsFastServiceTier).map(codexModelId);
 			const models = remote
 				.map((m) => toOpenClawModel(m, providerId, costCatalog, fastMode))
 				.filter((m) => m !== null);

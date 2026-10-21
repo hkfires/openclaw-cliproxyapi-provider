@@ -31,7 +31,6 @@ export const MODELS_REQUEST_TIMEOUT_MS = 60_000;
 export const MODELS_DEV_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export const DEFAULT_API_DRIVER = "openai-responses";
-export const OPENCLAW_API_DRIVER = DEFAULT_API_DRIVER;
 export const ZERO_COST: OpenClawCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 export const DEFAULT_MAX_TOKENS = 16384;
 export const DEFAULT_CONTEXT_WINDOW = 128000;
@@ -40,17 +39,12 @@ export class ModelsHttpError extends Error {
 	readonly status: number;
 	readonly statusText: string;
 
-	constructor(status: number, statusText: string, body: string) {
+	constructor(status: number, statusText: string) {
 		super(`models request failed: ${status} ${statusText}`);
-		void body;
 		this.name = "ModelsHttpError";
 		this.status = status;
 		this.statusText = statusText;
 	}
-}
-
-export function isUnauthorizedModelsError(error: unknown): boolean {
-	return error instanceof ModelsHttpError && error.status === 401;
 }
 
 export function firstNonEmpty(...values: Array<string | undefined | null>): string | undefined {
@@ -84,7 +78,6 @@ export function getOpenClawConfigDir(): string {
 export function resolveEndpoints(baseUrlInput: string): {
 	inferenceBaseUrl: string;
 	modelsUrl: string;
-	rootOrigin: string;
 } {
 	let raw = baseUrlInput.trim();
 	if (!raw) {
@@ -99,7 +92,6 @@ export function resolveEndpoints(baseUrlInput: string): {
 		throw new Error("Invalid base URL");
 	const path = url.pathname.replace(/\/+$/, "");
 
-	const rootOrigin = url.origin;
 	let inferenceBaseUrl = "";
 
 	if (path === "" || path === "/") {
@@ -115,13 +107,11 @@ export function resolveEndpoints(baseUrlInput: string): {
 		inferenceBaseUrl = `${url.origin}${path}/v1`;
 	}
 
-	// Normalize root origin and models path
 	const modelsUrl = `${inferenceBaseUrl}/models?client_version=${encodeURIComponent(CLIENT_VERSION)}`;
 
 	return {
 		inferenceBaseUrl,
 		modelsUrl,
-		rootOrigin,
 	};
 }
 
@@ -255,7 +245,6 @@ export function resolveConnection(
 		apiKey,
 		inferenceBaseUrl: endpoints.inferenceBaseUrl,
 		modelsUrl: endpoints.modelsUrl,
-		rootOrigin: endpoints.rootOrigin,
 		apiDriver,
 	};
 }
@@ -439,8 +428,9 @@ export async function fetchCodexModels(
 	});
 
 	if (!response.ok) {
-		const body = await response.text().catch(() => "");
-		throw new ModelsHttpError(response.status, response.statusText, body);
+		// Error bodies may echo credentials; discard instead of buffering them.
+		await response.body?.cancel().catch(() => undefined);
+		throw new ModelsHttpError(response.status, response.statusText);
 	}
 
 	const payload: unknown = await response.json();
@@ -787,52 +777,6 @@ export function matchModelCost(modelId: string, costCatalog: ModelsDevCostCatalo
 	if (!entry) return { ...ZERO_COST };
 	return cloneCost(isFastMode && entry.fast ? entry.fast : entry.standard);
 }
-
-/**
- * Fallback static models to keep the gateway running if upstream CPA is offline during startup.
- */
-export const FALLBACK_MODELS: Array<Omit<OpenClawProviderModel, "provider">> = [
-	{
-		id: "gpt-4o",
-		name: "GPT-4o",
-		api: OPENCLAW_API_DRIVER,
-		reasoning: false,
-		input: ["text", "image"],
-		contextWindow: 128000,
-		maxTokens: 16384,
-		cost: { input: 2.5, output: 10, cacheRead: 1.25, cacheWrite: 2.5 },
-	},
-	{
-		id: "claude-3-7-sonnet-20250219",
-		name: "Claude 3.7 Sonnet",
-		api: OPENCLAW_API_DRIVER,
-		reasoning: true,
-		input: ["text", "image"],
-		contextWindow: 200000,
-		maxTokens: 64000,
-		cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-	},
-	{
-		id: "gemini-2.5-pro",
-		name: "Gemini 2.5 Pro",
-		api: OPENCLAW_API_DRIVER,
-		reasoning: true,
-		input: ["text", "image"],
-		contextWindow: 1048576,
-		maxTokens: 65536,
-		cost: { input: 1.25, output: 5, cacheRead: 0.3125, cacheWrite: 1.25 },
-	},
-	{
-		id: "deepseek-chat",
-		name: "DeepSeek V3",
-		api: OPENCLAW_API_DRIVER,
-		reasoning: false,
-		input: ["text"],
-		contextWindow: 64000,
-		maxTokens: 8192,
-		cost: { input: 0.14, output: 0.28, cacheRead: 0.014, cacheWrite: 0.14 },
-	},
-];
 
 /**
  * Construct an on-the-fly model object for resolveDynamicModel.

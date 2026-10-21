@@ -1,4 +1,4 @@
-# CLIProxyAPI Provider
+# openclaw-cliproxyapi-provider
 
 [English](#english) | [简体中文](#简体中文)
 
@@ -131,6 +131,7 @@ npm run check          # Type checking, linting, and unit tests
 npm test               # Unit tests
 npm run test:host      # OpenClaw host integration tests
 npm run test:images    # Image generation and editing tests
+npm run test:refresh   # Background model refresh tests
 npm run build          # Build
 ```
 
@@ -269,6 +270,7 @@ npm run check          # 类型检查、代码格式与单元测试
 npm test               # 单元测试
 npm run test:host      # OpenClaw 宿主集成测试
 npm run test:images    # 生图与编辑能力测试
+npm run test:refresh   # 后台模型刷新测试
 npm run build          # 构建
 ```
 

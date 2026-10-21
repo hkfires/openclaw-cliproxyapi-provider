@@ -1,7 +1,7 @@
 {
 	"name": "openclaw-cliproxyapi-provider",
 	"version": "0.1.6",
-	"description": "OpenClaw provider plugin that auto-registers CLIProxyAPI models with models.dev pricing",
+	"description": "OpenClaw provider plugin for CLIProxyAPI with automatic model discovery, image generation, and models.dev pricing",
 	"type": "module",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
@@ -62,14 +62,13 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.3",
-		"@types/node": "^22.15.21",
+		"@types/node": "^24.19.2",
 		"openclaw": "2026.9.4",
 		"typescript": "6.0.3",
 		"vitest": "4.1.11"
 	},
 	"files": [
 		"dist",
-		"src",
 		"openclaw.plugin.json",
 		"cliproxyapi.example.json",
 		"README.md",

@@ -16,12 +16,9 @@ import {
 	extractReasoningEfforts,
 	fetchCodexModels,
 	firstNonEmpty,
-	isUnauthorizedModelsError,
 	loadConfigFile,
 	loadModelsCache,
-	ModelsHttpError,
 	matchModelCost,
-	OPENCLAW_API_DRIVER,
 	parseBooleanSetting,
 	resolveApiDriver,
 	resolveConnection,
@@ -73,7 +70,6 @@ describe("resolveEndpoints", () => {
 		expect(result).toEqual({
 			inferenceBaseUrl: "http://127.0.0.1:8317/v1",
 			modelsUrl: "http://127.0.0.1:8317/v1/models?client_version=openclaw",
-			rootOrigin: "http://127.0.0.1:8317",
 		});
 	});
 
@@ -172,18 +168,6 @@ describe("resolveFastDefault & parseBooleanSetting", () => {
 			if (prev === undefined) delete process.env.CLIPROXYAPI_FAST;
 			else process.env.CLIPROXYAPI_FAST = prev;
 		}
-	});
-});
-
-describe("isUnauthorizedModelsError", () => {
-	it("identifies 401 ModelsHttpError correctly", () => {
-		const err401 = new ModelsHttpError(401, "Unauthorized", "bad key");
-		const err500 = new ModelsHttpError(500, "Server Error", "");
-		const standardErr = new Error("other");
-
-		expect(isUnauthorizedModelsError(err401)).toBe(true);
-		expect(isUnauthorizedModelsError(err500)).toBe(false);
-		expect(isUnauthorizedModelsError(standardErr)).toBe(false);
 	});
 });
 
@@ -309,7 +293,7 @@ describe("model mapping helpers", () => {
 		expect(mapped?.id).toBe("gpt-4o");
 		expect(mapped?.name).toBe("GPT-4o (Omni)");
 		expect(mapped?.provider).toBe("cliproxyapi");
-		expect(mapped?.api).toBe(OPENCLAW_API_DRIVER);
+		expect(mapped?.api).toBe(DEFAULT_API_DRIVER);
 		expect(mapped?.contextWindow).toBe(128000);
 		expect(mapped?.maxTokens).toBe(DEFAULT_MAX_TOKENS);
 		expect(mapped?.input).toEqual(["text", "image"]);
@@ -413,7 +397,7 @@ describe("models cache persistence", () => {
 					id: "gpt-4o",
 					name: "GPT-4o",
 					provider: "cliproxyapi",
-					api: OPENCLAW_API_DRIVER,
+					api: DEFAULT_API_DRIVER,
 					reasoning: false,
 					input: ["text", "image"] as Array<"text" | "image">,
 					cost: ZERO_COST,
@@ -512,7 +496,7 @@ describe("createDynamicModel", () => {
 		expect(dynamic.id).toBe("o3-mini");
 		expect(dynamic.provider).toBe("cliproxyapi");
 		expect(dynamic.reasoning).toBe(true);
-		expect(dynamic.api).toBe(OPENCLAW_API_DRIVER);
+		expect(dynamic.api).toBe(DEFAULT_API_DRIVER);
 		expect(dynamic.baseUrl).toBe("http://127.0.0.1:8317/v1");
 		expect(dynamic.params?.service_tier).toBe("priority");
 	});

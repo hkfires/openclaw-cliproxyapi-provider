@@ -39,9 +39,14 @@ export function createRefreshService(
 				ctx.config.plugins?.entries?.cliproxyapi?.config?.refreshIntervalSeconds,
 			);
 			if (intervalMs === 0) return;
-			const agentIds: (string | undefined)[] = ctx.config.agents?.list?.length
-				? [...new Set(ctx.config.agents.list.map((agent) => agent.id))]
-				: [undefined];
+			// OpenClaw >=2026.10 keys agents by id under `entries`; older hosts use the legacy `list` roster.
+			const agents = ctx.config.agents as
+				| { entries?: Record<string, unknown>; list?: Array<{ id?: string }> }
+				| undefined;
+			const configuredIds = [...Object.keys(agents?.entries ?? {}), ...(agents?.list ?? []).map((agent) => agent.id)]
+				.map((id) => id?.trim())
+				.filter((id): id is string => Boolean(id));
+			const agentIds: (string | undefined)[] = configuredIds.length > 0 ? [...new Set(configuredIds)] : [undefined];
 			const runRefresh = async () => {
 				for (const agentId of agentIds) {
 					for (const provider of providerIds) {

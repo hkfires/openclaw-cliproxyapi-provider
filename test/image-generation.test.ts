@@ -117,27 +117,6 @@ it("prefers environment connection/auth and otherwise resolves the selected agen
 	expect(resolveAuth).toHaveBeenCalledOnce();
 });
 
-it("resolves alias-specific credentials before canonical credentials", async () => {
-	const { dir } = fixture("cliproxyapi", false);
-	const provider = buildImageGenerationProvider(dir, "cliproxyapi", ["cpa"]);
-	await provider.generateImage({ provider: "cpa", model: "gpt-image-2", prompt: "alias auth", cfg: {} });
-	expect(resolveAuth.mock.calls[0][0].provider).toBe("cpa");
-});
-
-it("falls back to canonical credentials only when alias credentials are missing", async () => {
-	const { dir } = fixture("cliproxyapi", false);
-	const provider = buildImageGenerationProvider(dir, "cliproxyapi", ["cpa"]);
-	const missing = Object.assign(new Error("missing"), { code: "missing-provider-auth" });
-	resolveAuth.mockRejectedValueOnce(missing).mockResolvedValueOnce({
-		apiKey: "canonical-key",
-		mode: "api-key",
-		source: "profile",
-	});
-	await provider.generateImage({ provider: "cpa", model: "gpt-image-2", prompt: "fallback auth", cfg: {} });
-	expect(resolveAuth.mock.calls.map(([params]) => params.provider)).toEqual(["cpa", "cliproxyapi"]);
-	expect(new Headers(fetchGuard.mock.calls[0][0].init?.headers).get("Authorization")).toBe("Bearer canonical-key");
-});
-
 it("reports availability using file credentials or host auth", () => {
 	const local = fixture();
 	configured.mockReturnValue(false);
@@ -146,9 +125,7 @@ it("reports availability using file credentials or host auth", () => {
 	expect(remote.provider.isConfigured?.({ cfg: {} })).toBe(false);
 	configured.mockReturnValue(true);
 	expect(remote.provider.isConfigured?.({ cfg: {} })).toBe(true);
-	const aliased = buildImageGenerationProvider(remote.dir, "cliproxyapi", ["cpa"]);
-	configured.mockImplementation(({ provider }) => provider === "cpa");
-	expect(aliased.isConfigured?.({ cfg: {} })).toBe(true);
+	expect(configured).toHaveBeenLastCalledWith({ provider: "cpa", cfg: {} });
 });
 
 it("propagates authentication failures without sending requests", async () => {

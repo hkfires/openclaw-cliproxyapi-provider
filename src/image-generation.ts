@@ -39,14 +39,9 @@ function decodeImageBase64(value: unknown): Buffer {
 }
 
 /** CPA connection/auth normalization plus the OpenClaw image-generation contract. */
-export function buildImageGenerationProvider(
-	configDir: string,
-	providerId: string,
-	aliases: string[] = [],
-): ImageProvider {
+export function buildImageGenerationProvider(configDir: string, providerId: string): ImageProvider {
 	return {
 		id: providerId,
-		...(aliases.length > 0 ? { aliases } : {}),
 		label: "CLIProxyAPI Images",
 		// Models are selected explicitly through mediaModels.image or --model.
 		// Omitting an automatic default prevents an alias ref from being retried
@@ -72,8 +67,7 @@ export function buildImageGenerationProvider(
 		},
 		isConfigured(ctx) {
 			return (
-				Boolean(resolveConnection(configDir).apiKey) ||
-				[providerId, ...aliases].some((provider) => isProviderApiKeyConfigured({ provider, ...ctx }))
+				Boolean(resolveConnection(configDir).apiKey) || isProviderApiKeyConfigured({ provider: providerId, ...ctx })
 			);
 		},
 		async generateImage(req: ImageRequest) {
@@ -95,31 +89,15 @@ export function buildImageGenerationProvider(
 			const conn = resolveConnection(configDir);
 			let apiKey = conn.apiKey;
 			if (!apiKey) {
-				// Resolve the requested alias first so alias-specific provider config remains valid.
 				const { resolveApiKeyForProvider } = await import("openclaw/plugin-sdk/agent-runtime");
-				const supportedIds = new Set([providerId, ...aliases]);
-				const requestedId = supportedIds.has(req.provider) ? req.provider : providerId;
-				const authProviderIds = [...new Set([requestedId, providerId, ...aliases])];
-				let missingAuthError: unknown;
-				for (const provider of authProviderIds) {
-					try {
-						const auth = await resolveApiKeyForProvider({
-							provider,
-							cfg: req.cfg,
-							agentDir: req.agentDir,
-							store: req.authStore,
-							secretSentinels: false,
-						});
-						apiKey = auth.apiKey;
-						break;
-					} catch (error) {
-						if (!(error instanceof Error) || !("code" in error) || error.code !== "missing-provider-auth") {
-							throw error;
-						}
-						missingAuthError = error;
-					}
-				}
-				if (!apiKey && missingAuthError) throw missingAuthError;
+				const auth = await resolveApiKeyForProvider({
+					provider: providerId,
+					cfg: req.cfg,
+					agentDir: req.agentDir,
+					store: req.authStore,
+					secretSentinels: false,
+				});
+				apiKey = auth.apiKey;
 			}
 			if (!apiKey) throw new ImageGenerationError("MISSING_API_KEY", "CLIProxyAPI API key is required");
 			signal.throwIfAborted();

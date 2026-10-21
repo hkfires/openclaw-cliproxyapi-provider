@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
+import { stagePlugin } from './host-stage.mjs';
 const exec = promisify(execFile);
 const state = await mkdtemp(join(tmpdir(), 'cpa-refresh-'));
 let modelId='before-refresh';
@@ -23,7 +24,8 @@ const env={...process.env,OPENCLAW_STATE_DIR:state,OPENCLAW_CONFIG_PATH:join(sta
 for(const k of Object.keys(env)) {
  if (/^(CLIPROXYAPI_|CPA_|OPENCLAW_)/.test(k) && !['OPENCLAW_STATE_DIR','OPENCLAW_CONFIG_PATH','OPENCLAW_GATEWAY_PORT','OPENCLAW_GATEWAY_TOKEN','CLIPROXYAPI_BASE_URL','CLIPROXYAPI_API_KEY'].includes(k)) delete env[k];
 }
-await writeFile(env.OPENCLAW_CONFIG_PATH,JSON.stringify({gateway:{mode:'local',port,auth:{mode:'token',token:env.OPENCLAW_GATEWAY_TOKEN}},agents:{defaults:{model:{primary:'cliproxyapi/before-refresh',fallbacks:['cpa/before-refresh']}}},plugins:{allow:['cliproxyapi'],load:{paths:[resolve('.')]},entries:{cliproxyapi:{enabled:true,config:{refreshIntervalSeconds:30}}}}}));
+const pluginDir=await stagePlugin(state);
+await writeFile(env.OPENCLAW_CONFIG_PATH,JSON.stringify({gateway:{mode:'local',port,auth:{mode:'token',token:env.OPENCLAW_GATEWAY_TOKEN}},agents:{defaults:{model:{primary:'cliproxyapi/before-refresh',fallbacks:['cpa/before-refresh']}}},plugins:{allow:['cliproxyapi'],load:{paths:[pluginDir]},entries:{cliproxyapi:{enabled:true,config:{refreshIntervalSeconds:30}}}}}));
 let logs='';
 const child=spawn(process.execPath,[cli,'gateway','run','--allow-unconfigured'],{env,stdio:['ignore','pipe','pipe']});
 child.stdout.on('data',d=>{logs+=d;});child.stderr.on('data',d=>{logs+=d;});
@@ -38,8 +40,9 @@ try{
    if(response.status===200){ready=true;break;}
    assert.equal(response.status,503,`unexpected startup probe status: ${response.status}`);
   } catch(error) {
-   // Startup polling boundary: refusal is expected before HTTP binds; all other failures propagate.
-   if(error.cause?.code!=='ECONNREFUSED')throw error;
+   // Startup polling boundary: refusal before HTTP binds and slow probes while plugins load mean "not ready yet";
+   // all other failures propagate.
+   if(error.cause?.code!=='ECONNREFUSED'&&error.name!=='TimeoutError')throw error;
   }
  }
  assert.ok(ready,logs);
